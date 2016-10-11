@@ -621,7 +621,7 @@ sub run_qemu {
     print "warning: qemu doesn't support jitter\n"
       if defined $jitter;
     my (@cmd) = ('qemu');
-    push (@cmd, '-no-kqemu');
+#    push (@cmd, '-no-kqemu');
     push (@cmd, '-hda', $disks[0]) if defined $disks[0];
     push (@cmd, '-hdb', $disks[1]) if defined $disks[1];
     push (@cmd, '-hdc', $disks[2]) if defined $disks[2];
@@ -925,15 +925,15 @@ sub exec_setitimer {
     exit (1);
 }
 
-sub SIGVTALRM {
-    use Config;
-    my $i = 0;
-    foreach my $name (split(' ', $Config{sig_name})) {
-	return $i if $name eq 'VTALRM';
-	$i++;
-    }
-    return 0;
-}
+#sub SIGVTALRM {
+#    use Config;
+#    my $i = 0;
+#    foreach my $name (split(' ', $Config{sig_name})) {
+#	return $i if $name eq 'VTALRM';
+#	$i++;
+#   }
+#    return 0;
+#}
 
 # find_in_path ($program)
 #
