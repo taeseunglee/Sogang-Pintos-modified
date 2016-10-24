@@ -17,10 +17,12 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "utils/parse_fn.c"
+
+#include "threads/malloc.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+int get_argc(const char *filename);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -44,7 +46,7 @@ process_execute (const char *file_name)
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
   else
-      start_process (file_name);
+      start_process (fn_copy);
 
   return tid;
 }
@@ -63,6 +65,7 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+  printf("\n\nstart process\n\n");
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
@@ -218,7 +221,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofset;
   bool success = false;
   int i;
-  char *token, *save_ptr;
+  int argc = 0;
+  char **argv = NULL,
+       *token = NULL, *save_ptr = NULL,
+       *fn_copy = NULL;
+  void **argv_addrs = NULL;
+  uint8_t *buf = malloc(222);
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -227,12 +235,27 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* parse filename */
-  filename = str
-  for (token = strtok_r (file_name, " ", &save_ptr); token != NULL;
-       token = strtok_r (NULL, " ", &save_ptr));
+  fn_copy = malloc(strlen(file_name) * sizeof(char)); // TODO : free
+  if (fn_copy == NULL) {
+    // TODO : message
+    goto done;
+  }
+  strlcpy(fn_copy, file_name, PGSIZE);
+  
+  argc = get_argc(file_name);
+  argv = malloc(argc * sizeof(char*));                // TODO : free
+  if (argv == NULL)
+    goto done;
+
+  for (i = 0, token = strtok_r (fn_copy, " ", &save_ptr); token != NULL;
+       i++, token = strtok_r (NULL, " ", &save_ptr))
+    {
+      argv[i] = token;
+    }
+
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (argv[0]);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -311,9 +334,66 @@ load (const char *file_name, void (**eip) (void), void **esp)
         }
     }
 
+  printf("setup_stack\n");
   /* Set up stack. */
   if (!setup_stack (esp))
     goto done;
+
+
+  /* construct ESP start */
+  // 1. load argv[i][j]
+  int argv_len = 0, j = 0;
+  argv_addrs = malloc(argc * sizeof(void*)); // TODO : free
+
+  for (i = argc - 1; i >= 0; --i)
+    {
+      argv_len = strlen(argv[i]);
+      argv_addrs[i] = *esp = *esp - argv_len - 1;
+      
+      printf("print!\n");
+      for (j = 0; j < argv_len; ++j, ++(*esp)) {
+        *(char *)(*esp) = argv[i][j];
+      }
+
+      *(char*)(*esp) = '\0';
+      *esp = argv_addrs[i];
+      printf("\nargv_addrs[i] : %p\n", argv_addrs[i]);
+      printf("esp : %p\n", *esp);
+      printf("argv_len : %d\n", argv_len);
+      printf("esp[0] : %c %x\n", *(char*)(*esp), *(char*)(*esp));
+      hex_dump((uintptr_t)(*esp), buf, 50, 1);
+    }
+  // 2. load word-align
+  *esp = *esp + 1;
+  *(char*)(*esp) = '\0';
+
+  // 3. load argv[i]
+  *esp -= 4;
+  *(int*)(*esp) = 0;
+
+  for (i = argc - 1; i >= 0; --i)
+    {
+      *esp -= 4;
+      *(void**)(*esp) = argv_addrs[i];
+    }
+
+  // 4. argv
+  *esp -= 4;
+  *(void**)(*esp) = *esp + 4;
+
+  // 5. argc
+  *esp -= 4;
+  *(int*)(*esp) = argc;
+
+  // 6. return address
+  *esp -= 4;
+  *(int*)(*esp) = 0;
+  /* construct ESP end */
+  printf("ESP end %p\n", *esp);
+
+  hex_dump((uintptr_t)(*esp), buf, 100, 1);
+  free(buf);
+  printf("hex dump\n");
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
@@ -323,9 +403,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
  done:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
+
+  printf("done\n");
   return success;
 }
-
+
 /* load() helpers. */
 
 static bool install_page (void *upage, void *kpage, bool writable);
@@ -368,7 +450,7 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
      it then user code that passed a null pointer to system calls
      could quite likely panic the kernel by way of null pointer
      assertions in memcpy(), etc. */
-  if (phdr->p_vaddr < PGSIZE)
+  if (phdr->p_offset < PGSIZE)
     return false;
 
   /* It's okay. */
@@ -447,7 +529,7 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE - 12; // pintos manual - p.28
+        *esp = PHYS_BASE;
       else
         palloc_free_page (kpage);
     }
@@ -472,4 +554,24 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (th->pagedir, upage) == NULL
           && pagedir_set_page (th->pagedir, upage, kpage, writable));
+}
+
+int get_argc(const char *filename)
+{
+  int argc = 0;
+  char *token = NULL, *save_ptr = NULL,
+       *copy_filename = NULL;
+  int fn_len = strlen(filename) + 1;
+
+  copy_filename = malloc(fn_len * sizeof(char));
+  strlcpy(copy_filename, filename, fn_len);
+
+  for (token = strtok_r (copy_filename, " ", &save_ptr); token != NULL;
+       token = strtok_r (NULL, " ", &save_ptr))
+    {
+      argc ++;
+    }
+
+  free(copy_filename);
+  return argc;
 }
