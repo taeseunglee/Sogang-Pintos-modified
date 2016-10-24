@@ -31,7 +31,8 @@ int get_argc(const char *filename);
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy;
+  char *fn_copy, *fn_copy2, *fn_real, *save_ptr;
+  int fn_len = 0;
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
@@ -41,12 +42,22 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  fn_len = strlen(file_name) + 1;
+  fn_copy2 = malloc(fn_len * sizeof(char));
+  if (fn_copy2 == NULL) {
+    printf("[process_execute] malloc failed\n");
+    return TID_ERROR;
+  }
+  strlcpy (fn_copy2, file_name, fn_len);
+  
+  fn_real = strtok_r(fn_copy2, " ", &save_ptr); // TODO : free
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (fn_real, PRI_DEFAULT, start_process, fn_copy);
+  free(fn_copy2);
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
-  else
-      start_process (fn_copy);
 
   return tid;
 }
@@ -65,7 +76,6 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  printf("\n\nstart process\n\n");
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
@@ -95,6 +105,9 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  int i = 0, j;
+  for (i = 0; i < 500000000; i++)
+    j=i^j;
   return -1;
 }
 
@@ -226,7 +239,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
        *token = NULL, *save_ptr = NULL,
        *fn_copy = NULL;
   void **argv_addrs = NULL;
-  uint8_t *buf = malloc(222);
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -237,15 +249,17 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* parse filename */
   fn_copy = malloc(strlen(file_name) * sizeof(char)); // TODO : free
   if (fn_copy == NULL) {
-    // TODO : message
+    printf ("(malloc)filename copy failed in process.c\n");
     goto done;
   }
   strlcpy(fn_copy, file_name, PGSIZE);
   
   argc = get_argc(file_name);
   argv = malloc(argc * sizeof(char*));                // TODO : free
-  if (argv == NULL)
+  if (argv == NULL) {
+    printf ("(malloc)argv failed in process.c\n");
     goto done;
+  }
 
   for (i = 0, token = strtok_r (fn_copy, " ", &save_ptr); token != NULL;
        i++, token = strtok_r (NULL, " ", &save_ptr))
@@ -334,7 +348,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
         }
     }
 
-  printf("setup_stack\n");
   /* Set up stack. */
   if (!setup_stack (esp))
     goto done;
@@ -350,21 +363,15 @@ load (const char *file_name, void (**eip) (void), void **esp)
       argv_len = strlen(argv[i]);
       argv_addrs[i] = *esp = *esp - argv_len - 1;
       
-      printf("print!\n");
       for (j = 0; j < argv_len; ++j, ++(*esp)) {
         *(char *)(*esp) = argv[i][j];
       }
 
       *(char*)(*esp) = '\0';
       *esp = argv_addrs[i];
-      printf("\nargv_addrs[i] : %p\n", argv_addrs[i]);
-      printf("esp : %p\n", *esp);
-      printf("argv_len : %d\n", argv_len);
-      printf("esp[0] : %c %x\n", *(char*)(*esp), *(char*)(*esp));
-      hex_dump((uintptr_t)(*esp), buf, 50, 1);
     }
   // 2. load word-align
-  *esp = *esp + 1;
+  *esp = *esp - 1;
   *(char*)(*esp) = '\0';
 
   // 3. load argv[i]
@@ -389,11 +396,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   *esp -= 4;
   *(int*)(*esp) = 0;
   /* construct ESP end */
-  printf("ESP end %p\n", *esp);
 
-  hex_dump((uintptr_t)(*esp), buf, 100, 1);
-  free(buf);
-  printf("hex dump\n");
+  hex_dump((uintptr_t)(*esp), (const char*)*esp, (uintptr_t)PHYS_BASE - (uintptr_t)*esp, 1);
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
@@ -403,8 +407,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
  done:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
+  if (fn_copy)
+    free(fn_copy);
+  if (argv)
+    free(argv);
+  if (argv_addrs)
+    free(argv_addrs);
 
-  printf("done\n");
   return success;
 }
 
