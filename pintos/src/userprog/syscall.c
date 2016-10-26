@@ -142,8 +142,6 @@ syscall_handler (struct intr_frame *f/* UNUSED*/)
           break;
         }
     }
-  else
-    thread_exit();
 
 
 //  printf ("system call!\n");
@@ -168,7 +166,8 @@ syscall_exit(int status)
 
   // TODO
   //printf("Terminating the current user program!\n");
-  printf("%s exits with the status %d\n",cur->name,status);
+  cur->exit_status = status;
+  cur->normal_termin = true;
   thread_exit();
   return;
 }
