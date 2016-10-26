@@ -103,12 +103,33 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  int i = 0, j;
-  for (i = 0; i < 500000000; i++)
-    j=i^j;
-  return -1;
+  struct thread *cur = thread_current(),
+                *child = NULL;
+  struct list_elem *e;
+
+  for (e = list_begin (&cur->child_thread_list); 
+       e != list_end (&cur->child_thread_list);
+       e = list_next(e))
+    {
+      child = list_entry (e, struct thread, allelem);
+      if (child->tid == child_tid)
+        break;
+      child = NULL;
+    }
+
+  // child Not Found!
+  if (!child)
+    return -1;
+  list_remove(e);
+
+  // waiting the "child_tid child" until the child is dying
+  while ((child->status) != THREAD_DYING)
+    thread_yield();
+
+  // TODO!! Shoud be child->status dying?
+  return child->status;
 }
 
 /* Free the current process's resources. */
@@ -134,6 +155,7 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 }
 
 /* Sets up the CPU for running user code in the current
