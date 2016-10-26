@@ -470,6 +470,9 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
+
+  t->exit_status = 0;
+  t->normal_termin = false;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

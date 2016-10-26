@@ -100,6 +100,12 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
+#ifdef USERPROG
+    struct list child_thread_list;
+    int exit_status;
+    bool normal_termin;
+#endif
   };
 
 /* If false (default), use round-robin scheduler.
