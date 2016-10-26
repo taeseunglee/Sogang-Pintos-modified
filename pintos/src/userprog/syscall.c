@@ -123,12 +123,12 @@ syscall_handler (struct intr_frame *f/* UNUSED*/)
                   thread_exit();
                   break;
                 }
-              syscall_fibonacci (*(int)ESP_ARGV_PTR(temp_esp, 0));
+              syscall_fibonacci (*(int *)ESP_ARGV_PTR(temp_esp, 0));
             }
           break;
         case SYS_SUM: // Sum Of four integers
             {
-              if (if(is_valid_arg3(temp_esp)))
+              if (!is_valid_arg3(temp_esp))
                 {
                   thread_exit();
                   break;
@@ -136,7 +136,7 @@ syscall_handler (struct intr_frame *f/* UNUSED*/)
               syscall_sum_of_four_integers(*(int*)ESP_ARGV3_PTR(temp_esp, 0),
                                            *(int*)ESP_ARGV3_PTR(temp_esp, 1),
                                            *(int*)ESP_ARGV3_PTR(temp_esp, 2),
-                                           *(int*)ESP_ARGV3_PTR(temp_esp, 3),
+                                           *(int*)ESP_ARGV3_PTR(temp_esp, 3)
                                            );
             }
           break;
@@ -167,7 +167,8 @@ syscall_exit(int status)
   struct thread *cur = thread_current();
 
   // TODO
-  printf("Terminating the current user program!\n");
+  //printf("Terminating the current user program!\n");
+  printf("%s exits with the status %d\n",cur->name,status);
   thread_exit();
   return;
 }
@@ -203,13 +204,14 @@ syscall_read(int fd, void *buffer, unsigned size)
 int
 syscall_write(int fd, const void *buffer, unsigned size)
 {
-  if(fd == 1)
+  if(fd == 1 && buffer != NULL)
     {
       putbuf((char *)buffer,(size_t)size);
       return size;
     }
   // if any error occurs, change to iteration
   // increasing the size by i
+  return 0;
 }
 
 int
