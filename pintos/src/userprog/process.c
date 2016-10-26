@@ -398,10 +398,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* construct ESP end */
 
   hex_dump((uintptr_t)(*esp), (const char*)*esp, (uintptr_t)PHYS_BASE - (uintptr_t)*esp, 1);
+  printf("esp(*esp) : %p(%p)\n", esp, *esp);
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
+  printf("eip : %p\n", *eip);
+  
   success = true;
 
  done:

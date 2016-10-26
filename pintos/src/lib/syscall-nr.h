@@ -18,6 +18,8 @@ enum
     SYS_SEEK,                   /* Change position in a file. */
     SYS_TELL,                   /* Report current position in a file. */
     SYS_CLOSE,                  /* Close a file. */
+    SYS_FIBO,                   /* fibonacci */
+    SYS_SUM,                    /* Sum of four integers */
 
     /* Project 3 and optionally project 4. */
     SYS_MMAP,                   /* Map a file into memory. */
@@ -28,7 +30,10 @@ enum
     SYS_MKDIR,                  /* Create a directory. */
     SYS_READDIR,                /* Reads a directory entry. */
     SYS_ISDIR,                  /* Tests if a fd represents a directory. */
-    SYS_INUMBER                 /* Returns the inode number for a fd. */
+    SYS_INUMBER,                /* Returns the inode number for a fd. */
+
+    /* Number Of System calls */
+    NUM_SYSCALL
   };
 
 #endif /* lib/syscall-nr.h */
