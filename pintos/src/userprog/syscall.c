@@ -166,10 +166,9 @@ syscall_exit(int status)
 {
   struct thread *cur = thread_current();
 
-  // TODO
   //printf("Terminating the current user program!\n");
-  cur->status = THREAD_DYING;
   cur->exit_status = status;
+  cur->status = THREAD_DYING;
   cur->normal_termin = true;
   printf("%s: exit(%d)\n", cur->name, status);
   thread_exit();

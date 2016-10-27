@@ -102,10 +102,11 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
 
 #ifdef USERPROG
+    /* Used for child threads */
     struct list_elem child_elem;
     struct list child_thread_list;
-    int exit_status;
     bool normal_termin;
+    int exit_status;
 #endif
   };
 
