@@ -8,6 +8,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -58,6 +59,33 @@ process_execute (const char *file_name)
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
+  else 
+    {
+//      printf("process_execute in!!\n");
+      /* Locates a new thread(Child Thread)
+        at child_thread_list of current thread(Parent Thread).
+        When thread_create execute, a new child thread is
+        located at the back of list by list_push_back().
+        So we can get a new child thread using list_end().
+        Since list_pop_back return type is struct list_elem*,
+        we should change this elem to thread by using list_entry().
+      */
+      struct thread *cur = thread_current(), // parent thread (child thread is a new thread.)
+                    *child_thread = NULL;
+      struct list_elem *e = NULL;
+
+//      printf("before sema_down\n");
+
+//      printf("after sema_down\n");
+      e = list_rbegin(&cur->child_thread_list);
+      child_thread = list_entry(e, struct thread, child_elem);
+      sema_down(&child_thread->wait_sema); // for start_process and loading
+
+
+      if(child_thread->tid != tid)
+        tid = TID_ERROR;
+      // Now, The New Thread is a executable child thread of current thread! (Load complete!)
+    }
 
   return tid;
 }
@@ -80,8 +108,14 @@ start_process (void *file_name_)
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
+
+//  sema_up(&thread_current()->parent->_sema);
+  sema_up(&thread_current()->wait_sema);
+  // NOTE! Do we change to THIS? thread_exit -> syscall_exit()
+  if (!success) {
+    list_remove(&thread_current()->child_elem);
+    syscall_exit(-1);
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -105,6 +139,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
+//  printf("process_wait!!\n");
   /*
   int i, j = 1;
   for (i = 0; i < 500000000; i++)
@@ -113,6 +148,8 @@ process_wait (tid_t child_tid)
   struct thread *cur = thread_current(),
                 *child = NULL;
   struct list_elem *e;
+  int exit_status = 0;
+//  int exit_status;
 
   for (e = list_begin (&cur->child_thread_list); 
        e != list_end (&cur->child_thread_list);
@@ -124,17 +161,40 @@ process_wait (tid_t child_tid)
       child = NULL;
     }
 
+
   // child Not Found!
   if (!child)
-    return -1;
+    {
+      return -1;
+    }
+/*
+  cur->tid_wait = child_tid;
+  sema_down(&cur->wait_sema);
   list_remove(e);
+*/
+  if (child->status != THREAD_DYING)
+    {
+      sema_down(&child->wait_sema);
+      exit_status = child->exit_status;
+      sema_up(&child->exit_sema);
+    }
+  else
+    {
+      if (child->normal_termin)
+        {
+          exit_status = child->exit_status;
+          sema_up(&child->exit_sema);
+        }
+      else
+        {
+          sema_up(&child->exit_sema);
+          return -1;
+        }
+    }
 
   // waiting the "child_tid child" until the child is dying
-  while ((child->status) != THREAD_DYING)
-    thread_yield();
 
-  // TODO!! Shoud be child->status dying?
-  return child->exit_status;
+  return exit_status;
 }
 
 /* Free the current process's resources. */
@@ -431,6 +491,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   
   success = true;
+
+//  printf("load success!\n");
 
  done:
   /* We arrive here whether the load is successful or not. */
