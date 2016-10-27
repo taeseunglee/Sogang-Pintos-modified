@@ -12,6 +12,7 @@ int main(int argc, char **argv)
 	  c = atoi(argv[3]),
 	  d = atoi(argv[4]);
 
+  printf("%d %d %d %d\n", a, b, c, d);
   printf("%d %d\n", fibonacci(a), sum_of_four_integers(a, b, c, d));
 
   return EXIT_SUCCESS;

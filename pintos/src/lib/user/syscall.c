@@ -161,13 +161,13 @@ close (int fd)
 int
 fibonacci (int n)
 {
-  syscall1 (SYS_FIBO, n);
+  return syscall1 (SYS_FIBO, n);
 }
 
 int
 sum_of_four_integers(int a, int b, int c, int d)
 {
-  syscall4 (SYS_SUM, a, b, c, d);
+  return syscall4 (SYS_SUM, a, b, c, d);
 }
 
 mapid_t

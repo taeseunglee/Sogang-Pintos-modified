@@ -48,7 +48,7 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
   void *temp_esp = f->esp;
 
   /* Debugging */
-//  hex_dump((uintptr_t)f->esp, (const char*)f->esp, 330, 1);
+  //  hex_dump((uintptr_t)f->esp, (const char*)f->esp, 330, 1);
 
   // check that syscall number is valid
   if (-1 < sysnum && sysnum < NUM_SYSCALL)
@@ -67,8 +67,7 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   syscall_exit(-1);
                   break;
                 }
-
-//              hex_dump((uintptr_t)f->esp, (const char*)f->esp, 330, 1);
+              //              hex_dump((uintptr_t)f->esp, (const char*)f->esp, 330, 1);
               syscall_exit(*(int*)ESP_ARGV_PTR(temp_esp, 0));
             }
           break;
@@ -79,7 +78,7 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   syscall_exit(-1);
                   break;
                 }
-              syscall_exec(*(char**)ESP_ARGV_PTR(temp_esp, 0));
+              f->eax = syscall_exec(*(char**)ESP_ARGV_PTR(temp_esp, 0));
             }
           break;
         case SYS_WAIT:
@@ -89,7 +88,7 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   syscall_exit(-1);
                   break;
                 }
-              syscall_wait(*(pid_t*)ESP_ARGV_PTR(temp_esp, 0));
+              f->eax = syscall_wait(*(pid_t*)ESP_ARGV_PTR(temp_esp, 0));
             }
           break;
         case SYS_READ:
@@ -99,10 +98,10 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   syscall_exit(-1);
                   break;
                 }
-              syscall_read(*(int*)ESP_ARGV3_PTR(temp_esp, 0),
-                           (void*)*(int*)ESP_ARGV3_PTR(temp_esp, 1),
-                           (size_t)*(int*)ESP_ARGV3_PTR(temp_esp, 2)
-                           );
+              f->eax = syscall_read(*(int*)ESP_ARGV3_PTR(temp_esp, 0),
+                                    (void*)*(int*)ESP_ARGV3_PTR(temp_esp, 1),
+                                    (size_t)*(int*)ESP_ARGV3_PTR(temp_esp, 2)
+                                   );
             }
           break;
         case SYS_WRITE:
@@ -112,10 +111,10 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   syscall_exit(-1);
                   break;
                 }
-              syscall_write (*(int*)ESP_ARGV3_PTR(temp_esp, 0),
-                             (void*)*(int*)ESP_ARGV3_PTR(temp_esp, 1),
-                             (size_t)*(int*)ESP_ARGV3_PTR(temp_esp, 2)
-                             );
+              f->eax = syscall_write (*(int*)ESP_ARGV3_PTR(temp_esp, 0),
+                                      (void*)*(int*)ESP_ARGV3_PTR(temp_esp, 1),
+                                      (size_t)*(int*)ESP_ARGV3_PTR(temp_esp, 2)
+                                     );
             }
           break;
         case SYS_FIBO: // Calculate fibonacci
@@ -125,7 +124,7 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   syscall_exit(-1);
                   break;
                 }
-              syscall_fibonacci (*(int *)ESP_ARGV_PTR(temp_esp, 0));
+              f->eax = syscall_fibonacci (*(int *)ESP_ARGV_PTR(temp_esp, 0));
             }
           break;
         case SYS_SUM: // Sum Of four integers
@@ -135,19 +134,19 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   syscall_exit(-1);
                   break;
                 }
-              syscall_sum_of_four_integers(*(int*)ESP_ARGV3_PTR(temp_esp, 0),
-                                           *(int*)ESP_ARGV3_PTR(temp_esp, 1),
-                                           *(int*)ESP_ARGV3_PTR(temp_esp, 2),
-                                           *(int*)ESP_ARGV3_PTR(temp_esp, 3)
-                                           );
+              f->eax = syscall_sum_of_four_integers(*(int*)ESP_ARGV3_PTR(temp_esp, 1),
+                                                    *(int*)ESP_ARGV3_PTR(temp_esp, 2),
+                                                    *(int*)ESP_ARGV3_PTR(temp_esp, 3),
+                                                    *(int*)ESP_ARGV3_PTR(temp_esp, 4)
+                                                   );
             }
           break;
         }
     }
 
 
-//  printf ("system call!\n");
-//  thread_exit ();
+  //  printf ("system call!\n");
+  //  thread_exit ();
 
   // need to handle a variety of system calls
   // access to system call by esp pointer in intr_frame
@@ -167,11 +166,37 @@ syscall_exit(int status)
   struct thread *cur = thread_current();
 
   //printf("Terminating the current user program!\n");
-  cur->exit_status = status;
-  cur->status = THREAD_DYING;
-  cur->normal_termin = true;
+
+  struct list* child_thread_list_ptr 
+   = &cur->child_thread_list;
+  struct thread* child = NULL;
+  struct list_elem* e;
+
+  for (e = list_begin(child_thread_list_ptr); e != list_end(child_thread_list_ptr);
+       e = list_next(e))
+    {
+      child = list_entry(e, struct thread, child_elem);
+      printf("In for syscall_exit!!!\n");
+      sema_up(&child->exit_sema);
+    }
+
+  cur->parent->exit_status = status;
+  cur->normal_termin = true;  // NOTE! no need?
   printf("%s: exit(%d)\n", cur->name, status);
+
+  //  printf("sema_up\n");
+  //  printf("sema_down\n");
+  sema_up (&cur->wait_sema);
+  sema_down (&cur->exit_sema); // wake up parent
+
+  //  printf("cur->tid : %d\n\ncur->parent->tid_wait : %d\n\n",cur->tid,
+  //         cur->parent->tid_wait);
+  //  if (cur->tid == cur->parent->tid_wait) {
+  //      sema_up(&cur->parent->wait_sema);
+  //  }
+  //  printf("before thread_exit\n");
   thread_exit();
+  //  printf("after thread_exit\n");
   return;
 }
 
@@ -197,9 +222,9 @@ syscall_read(int fd, void *buffer, unsigned size)
         *((uint8_t *)buffer + i) = input_getc();
         i++;
       }while(i<size && (*((uint8_t *)buffer + i) != '\0'));
-     // }while(i<size && (*((uint8_t *)buffer + i) != '\n' || *((uint8_t *)buffer + i) != '\0'));
-    }
-  return i;
+      // }while(i<size && (*((uint8_t *)buffer + i) != '\n' || *((uint8_t *)buffer + i) != '\0'));
+}
+return i;
 }
 
 int
@@ -248,7 +273,7 @@ is_valid_arg (const void* esp, int argc)
   for (i = 0; i < argc; i++)
     {
       argv_ptr = ESP_ARGV_PTR(esp, i); // ith argv pointer
-      
+
       if (!is_user_vaddr(argv_ptr) || !is_user_vaddr((void*)(*(char**)argv_ptr)))
         return false;
     }
@@ -265,7 +290,7 @@ is_valid_arg3 (const void* esp, int argc)
   for (i = 0; i < argc; i++)
     {
       argv_ptr = ESP_ARGV3_PTR(esp, i); // ith argv pointer
-      
+
       if (!is_user_vaddr(argv_ptr) || !is_user_vaddr((void*)(*(char**)argv_ptr)))
         return false;
     }
