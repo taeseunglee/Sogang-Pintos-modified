@@ -50,7 +50,7 @@ process_execute (const char *file_name)
   }
   strlcpy (fn_copy2, file_name, fn_len);
   
-  fn_real = strtok_r(fn_copy2, " ", &save_ptr); // TODO : free
+  fn_real = strtok_r(fn_copy2, " ", &save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (fn_real, PRI_DEFAULT, start_process, fn_copy);
@@ -105,6 +105,11 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
+  /*
+  int i, j = 1;
+  for (i = 0; i < 500000000; i++)
+    j = i^j;
+    */
   struct thread *cur = thread_current(),
                 *child = NULL;
   struct list_elem *e;
@@ -129,7 +134,7 @@ process_wait (tid_t child_tid)
     thread_yield();
 
   // TODO!! Shoud be child->status dying?
-  return child->status;
+  return child->exit_status;
 }
 
 /* Free the current process's resources. */
@@ -155,7 +160,6 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-  printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -375,6 +379,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
 
 
+
   /* construct ESP start */
   // 1. load argv[i][j]
   int argv_len = 0, j = 0;
@@ -482,7 +487,7 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
      it then user code that passed a null pointer to system calls
      could quite likely panic the kernel by way of null pointer
      assertions in memcpy(), etc. */
-  if (phdr->p_offset < PGSIZE)
+  if (phdr->p_vaddr < PGSIZE)
     return false;
 
   /* It's okay. */
