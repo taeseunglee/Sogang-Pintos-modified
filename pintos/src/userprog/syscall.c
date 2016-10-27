@@ -25,14 +25,14 @@ int syscall_sum_of_four_integers(int a, int b, int c, int d);
 /* syscall handler helper */
 // check argc and argv is valid virtual address using esp
 // We only use this function in syscall.c
-static bool is_valid_arg (const void* esp);
-static bool is_valid_arg3 (const void* esp);
+static bool is_valid_arg (const void* esp, int argc);
+static bool is_valid_arg3 (const void* esp, int argc);
 
 #ifndef __ESP_ARGV__
-#define ESP_ARGV_PTR(ESP, INDEX) ((void*)((uintptr_t)(ESP) + ((INDEX) + 3) * 4)) // 4 means sizeof(uintptr_t)
-#define ESP_ARGC_PTR(ESP) ((void*)((uintptr_t)(ESP) + 4))
+#define ESP_ARGV_PTR(ESP, INDEX) ((void*)((uintptr_t)(ESP) + ((INDEX) + 1) * 4)) // 4 means sizeof(uintptr_t)
+// #define ESP_ARGC_PTR(ESP) ((void*)((uintptr_t)(ESP) + 4))  // DELETE?
 #define ESP_ARGV3_PTR(ESP, INDEX) ((void*)((uintptr_t)(ESP) + ((INDEX) + 5) * 4)) 
-#define ESP_ARGC3_PTR(ESP) ((void*)((uintptr_t)(ESP) + 20))
+// #define ESP_ARGC3_PTR(ESP) ((void*)((uintptr_t)(ESP) + 20))
 #endif
 
 void
@@ -42,13 +42,13 @@ syscall_init (void)
 }
 
 static void
-syscall_handler (struct intr_frame *f/* UNUSED*/) 
+syscall_handler (struct intr_frame *f /* UNUSED */) 
 {
   int sysnum = *(int *)f->esp;
   void *temp_esp = f->esp;
 
   /* Debugging */
-  hex_dump((uintptr_t)f->esp, (const char*)f->esp, 330, 1);
+//  hex_dump((uintptr_t)f->esp, (const char*)f->esp, 330, 1);
 
   // check that syscall number is valid
   if (-1 < sysnum && sysnum < NUM_SYSCALL)
@@ -62,19 +62,21 @@ syscall_handler (struct intr_frame *f/* UNUSED*/)
           break;
         case SYS_EXIT:
             {
-              if (!is_valid_arg(temp_esp))
+              if (!is_valid_arg(temp_esp, 1))
                 {
-                  thread_exit();
+                  syscall_exit(-1);
                   break;
                 }
+
+//              hex_dump((uintptr_t)f->esp, (const char*)f->esp, 330, 1);
               syscall_exit(*(int*)ESP_ARGV_PTR(temp_esp, 0));
             }
           break;
         case SYS_EXEC:
             {
-              if (!is_valid_arg(temp_esp))
+              if (!is_valid_arg(temp_esp, 1))
                 {
-                  thread_exit();
+                  syscall_exit(-1);
                   break;
                 }
               syscall_exec(*(char**)ESP_ARGV_PTR(temp_esp, 0));
@@ -82,9 +84,9 @@ syscall_handler (struct intr_frame *f/* UNUSED*/)
           break;
         case SYS_WAIT:
             {
-              if (!is_valid_arg (temp_esp))
+              if (!is_valid_arg (temp_esp, 1))
                 {
-                  thread_exit();
+                  syscall_exit(-1);
                   break;
                 }
               syscall_wait(*(pid_t*)ESP_ARGV_PTR(temp_esp, 0));
@@ -92,9 +94,9 @@ syscall_handler (struct intr_frame *f/* UNUSED*/)
           break;
         case SYS_READ:
             {
-              if (!is_valid_arg3 (temp_esp))
+              if (!is_valid_arg3 (temp_esp, 3))
                 {
-                  thread_exit();
+                  syscall_exit(-1);
                   break;
                 }
               syscall_read(*(int*)ESP_ARGV3_PTR(temp_esp, 0),
@@ -105,9 +107,9 @@ syscall_handler (struct intr_frame *f/* UNUSED*/)
           break;
         case SYS_WRITE:
             {
-              if (!is_valid_arg3(temp_esp))
+              if (!is_valid_arg3(temp_esp, 3))
                 {
-                  thread_exit();
+                  syscall_exit(-1);
                   break;
                 }
               syscall_write (*(int*)ESP_ARGV3_PTR(temp_esp, 0),
@@ -118,9 +120,9 @@ syscall_handler (struct intr_frame *f/* UNUSED*/)
           break;
         case SYS_FIBO: // Calculate fibonacci
             {
-              if (!is_valid_arg(temp_esp))
+              if (!is_valid_arg(temp_esp, 1))
                 {
-                  thread_exit();
+                  syscall_exit(-1);
                   break;
                 }
               syscall_fibonacci (*(int *)ESP_ARGV_PTR(temp_esp, 0));
@@ -128,9 +130,9 @@ syscall_handler (struct intr_frame *f/* UNUSED*/)
           break;
         case SYS_SUM: // Sum Of four integers
             {
-              if (!is_valid_arg3(temp_esp))
+              if (!is_valid_arg3(temp_esp, 4))
                 {
-                  thread_exit();
+                  syscall_exit(-1);
                   break;
                 }
               syscall_sum_of_four_integers(*(int*)ESP_ARGV3_PTR(temp_esp, 0),
@@ -145,7 +147,7 @@ syscall_handler (struct intr_frame *f/* UNUSED*/)
 
 
 //  printf ("system call!\n");
-  thread_exit ();
+//  thread_exit ();
 
   // need to handle a variety of system calls
   // access to system call by esp pointer in intr_frame
@@ -166,8 +168,10 @@ syscall_exit(int status)
 
   // TODO
   //printf("Terminating the current user program!\n");
+  cur->status = THREAD_DYING;
   cur->exit_status = status;
   cur->normal_termin = true;
+  printf("%s: exit(%d)\n", cur->name, status);
   thread_exit();
   return;
 }
@@ -175,27 +179,26 @@ syscall_exit(int status)
 pid_t
 syscall_exec(const char *cmd_line)
 {
-  return process_execute(cmd_line);
-  // type casting...? tid_t -> pid_t
+  return (pid_t)process_execute(cmd_line);
 }
 
 int
 syscall_wait(pid_t pid)
 {
   return process_wait((tid_t)pid);
-  // need to add more codes on process_wait
 }
 
 int
 syscall_read(int fd, void *buffer, unsigned size)
 {
   unsigned i=0;
-  if(!fd)
+  if(fd == 0)
     {
       do{
         *((uint8_t *)buffer + i) = input_getc();
         i++;
-      }while(i<size && *((uint8_t *)buffer + i) != '\n');
+      }while(i<size && (*((uint8_t *)buffer + i) != '\0'));
+     // }while(i<size && (*((uint8_t *)buffer + i) != '\n' || *((uint8_t *)buffer + i) != '\0'));
     }
   return i;
 }
@@ -205,6 +208,8 @@ syscall_write(int fd, const void *buffer, unsigned size)
 {
   if(fd == 1 && buffer != NULL)
     {
+      //for (i = 0; i < size; i++)
+      //  if(!*((char *)buffer + i)) break;
       putbuf((char *)buffer,(size_t)size);
       return size;
     }
@@ -236,17 +241,10 @@ syscall_sum_of_four_integers(int a, int b, int c, int d)
 
 // ex) is_valid = is_valid_arg (f->esp);
 static bool
-is_valid_arg (const void* esp)
+is_valid_arg (const void* esp, int argc)
 {
   int i;
   void* argv_ptr = NULL;
-  int argc = 0;
-
-  if (!is_user_vaddr(ESP_ARGC_PTR(esp)))
-      return false;
-
-  // the ptr of argc is User Vaddr!
-  argc = *(int*)ESP_ARGC_PTR(esp);
 
   for (i = 0; i < argc; i++)
     {
@@ -260,11 +258,10 @@ is_valid_arg (const void* esp)
 }
 
 static bool
-is_valid_arg3 (const void* esp)
+is_valid_arg3 (const void* esp, int argc)
 {
   int i;
   void* argv_ptr = NULL;
-  int argc = 3;
 
   for (i = 0; i < argc; i++)
     {
