@@ -1,12 +1,18 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <syscall.h>
-#include "../userprog/syscall.h"
 
 int main(int argc, char **argv)
 {
+  if (argc < 5)
+	return EXIT_FAILURE;
 
-  printf("Result of Fibonacci : %d\n",syscall_fibonacci(argv[0]));
-  printf("Result of Sum : %d\n",syscall_sum_of_four_integers(argv[0],argv[1],argv[2],argv[3]));
+  int a = atoi(argv[1]),
+	  b = atoi(argv[2]),
+	  c = atoi(argv[3]),
+	  d = atoi(argv[4]);
+
+  printf("%d %d\n", fibonacci(a), sum_of_four_integers(a, b, c, d));
 
   return EXIT_SUCCESS;
 }
