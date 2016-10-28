@@ -183,6 +183,9 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  /* ADDED */
+  //struct thread *parent = thread_current();
+  //list_push_back(&parent->child_list,&t->child_list_ptr);
 
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
@@ -207,8 +210,10 @@ thread_create (const char *name, int priority,
   intr_set_level (old_level);
 
   struct thread *cur = thread_current();
-  list_push_back(&cur->child_thread_list,
-                 &t->child_elem);
+  t->parent = cur;
+  list_push_back (&cur->child_list,
+                  &t->child_elem);
+
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -302,7 +307,7 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
-  list_remove (&thread_current()->allelem);
+  //list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -473,10 +478,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-  list_push_back (&all_list, &t->allelem);
 
-  t->exit_status = 0;
-  t->normal_termin = false;
+  list_init (&t->child_list);
+  sema_init (&t->load_sema, 0);
+  sema_init (&t->wait_sema, 0);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

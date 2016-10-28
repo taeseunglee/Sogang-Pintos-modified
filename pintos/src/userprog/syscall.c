@@ -79,7 +79,7 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   syscall_exit(-1);
                   break;
                 }
-              syscall_exec(*(char**)ESP_ARGV_PTR(temp_esp, 0));
+              f->eax = syscall_exec(*(char**)ESP_ARGV_PTR(temp_esp, 0));
             }
           break;
         case SYS_WAIT:
@@ -99,7 +99,7 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   syscall_exit(-1);
                   break;
                 }
-              syscall_read(*(int*)ESP_ARGV3_PTR(temp_esp, 0),
+              f->eax = syscall_read(*(int*)ESP_ARGV3_PTR(temp_esp, 0),
                            (void*)*(int*)ESP_ARGV3_PTR(temp_esp, 1),
                            (size_t)*(int*)ESP_ARGV3_PTR(temp_esp, 2)
                            );
@@ -112,10 +112,10 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   syscall_exit(-1);
                   break;
                 }
-              syscall_write (*(int*)ESP_ARGV3_PTR(temp_esp, 0),
-                             (void*)*(int*)ESP_ARGV3_PTR(temp_esp, 1),
-                             (size_t)*(int*)ESP_ARGV3_PTR(temp_esp, 2)
-                             );
+              f->eax = syscall_write (*(int*)ESP_ARGV3_PTR(temp_esp, 0),
+                                      (void*)*(int*)ESP_ARGV3_PTR(temp_esp, 1),
+                                      (size_t)*(int*)ESP_ARGV3_PTR(temp_esp, 2)
+                                      );
             }
           break;
         case SYS_FIBO: // Calculate fibonacci
@@ -135,11 +135,11 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   syscall_exit(-1);
                   break;
                 }
-              syscall_sum_of_four_integers(*(int*)ESP_ARGV3_PTR(temp_esp, 0),
-                                           *(int*)ESP_ARGV3_PTR(temp_esp, 1),
-                                           *(int*)ESP_ARGV3_PTR(temp_esp, 2),
-                                           *(int*)ESP_ARGV3_PTR(temp_esp, 3)
-                                           );
+              f->eax = syscall_sum_of_four_integers(*(int*)ESP_ARGV3_PTR(temp_esp, 0),
+                                                   *(int*)ESP_ARGV3_PTR(temp_esp, 1),
+                                                   *(int*)ESP_ARGV3_PTR(temp_esp, 2),
+                                                   *(int*)ESP_ARGV3_PTR(temp_esp, 3)
+                                                   );
             }
           break;
         }
@@ -168,10 +168,10 @@ syscall_exit(int status)
 
   // TODO
   //printf("Terminating the current user program!\n");
-  cur->status = THREAD_DYING;
+  //cur->status = THREAD_DYING;
   cur->exit_status = status;
-  cur->normal_termin = true;
   printf("%s: exit(%d)\n", cur->name, status);
+  cur->normal_termin = true;
   thread_exit();
   return;
 }
@@ -179,6 +179,15 @@ syscall_exit(int status)
 pid_t
 syscall_exec(const char *cmd_line)
 {
+  struct thread *parent = thread_current();
+  struct list_elem *e = list_begin(&parent -> child_list);
+  struct thread *child = list_entry(e, struct thread, child_elem);
+
+  if(child->tid == parent->tid)
+  {
+    while(!child->normal_termin);
+  }
+  
   return (pid_t)process_execute(cmd_line);
 }
 

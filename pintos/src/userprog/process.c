@@ -45,7 +45,7 @@ process_execute (const char *file_name)
   fn_len = strlen(file_name) + 1;
   fn_copy2 = malloc(fn_len * sizeof(char));
   if (fn_copy2 == NULL) {
-    printf("[process_execute] malloc failed\n");
+    //printf("[process_execute] malloc failed\n");
     return TID_ERROR;
   }
   strlcpy (fn_copy2, file_name, fn_len);
@@ -56,8 +56,11 @@ process_execute (const char *file_name)
   tid = thread_create (fn_real, PRI_DEFAULT, start_process, fn_copy);
   free(fn_copy2);
 
+  sema_down(&thread_current()->load_sema);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
+
+  //search?
 
   return tid;
 }
@@ -80,8 +83,23 @@ start_process (void *file_name_)
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
+  struct thread * cur = thread_current();
+  printf("[Debug] before loading check - sema check?\n");
+  if (!success)
+    {
+      list_remove(&cur->child_elem);
+      sema_up(&cur->parent->load_sema);
+      thread_exit ();
+    }
+  else 
+    {
+      printf("[Debug] Loading Success! before sema_up\n");
+      sema_up(&cur->parent->load_sema);
+      printf("[Debug] Loading Success! after sema_up\n");
+      sema_down(&cur->wait_sema);
+    }
+
+  printf("[Debug] after loading check success\n");
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -105,36 +123,13 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
-  /*
+  struct list_elem e;
+  struct thread * ;
+  for (e = list_begin(&thread))
   int i, j = 1;
   for (i = 0; i < 500000000; i++)
     j = i^j;
-    */
-  struct thread *cur = thread_current(),
-                *child = NULL;
-  struct list_elem *e;
-
-  for (e = list_begin (&cur->child_thread_list); 
-       e != list_end (&cur->child_thread_list);
-       e = list_next(e))
-    {
-      child = list_entry (e, struct thread, allelem);
-      if (child->tid == child_tid)
-        break;
-      child = NULL;
-    }
-
-  // child Not Found!
-  if (!child)
-    return -1;
-  list_remove(e);
-
-  // waiting the "child_tid child" until the child is dying
-  while ((child->status) != THREAD_DYING)
-    thread_yield();
-
-  // TODO!! Shoud be child->status dying?
-  return child->exit_status;
+  return 0;
 }
 
 /* Free the current process's resources. */
