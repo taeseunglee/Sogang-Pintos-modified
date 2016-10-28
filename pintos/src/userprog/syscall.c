@@ -173,9 +173,14 @@ syscall_exit(int status)
 
   //printf("Terminating the current user program!\n");
   //cur->status = THREAD_DYING;
-  cur->exit_status = status;
+  cur->parent->exit_status = status;
   printf("%s: exit(%d)\n", cur->name, status);
   cur->normal_termin = true;
+  
+//  printf("I'm child!\n");
+//  printf("Child tid : %d | Parent tid : %d\n", cur->tid, cur->parent->tid);
+  sema_up (&cur->parent->wait_sema);
+//  printf("Wake up my parent!!\n");
   thread_exit();
 //  printf("after thread_exit\n");
   return;

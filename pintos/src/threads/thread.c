@@ -137,8 +137,6 @@ thread_tick (void)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
-
-
 }
 
 /* Prints thread statistics. */
@@ -309,7 +307,7 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
-  //list_remove (&thread_current()->allelem);
+  list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -481,8 +479,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
+  list_push_back (&all_list, &t->allelem);
   list_init (&t->child_list);
   sema_init (&t->load_sema, 0);
+  sema_init (&t->exec_sema, 0);
   sema_init (&t->wait_sema, 0);
 }
 

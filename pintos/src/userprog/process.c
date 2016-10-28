@@ -57,7 +57,9 @@ process_execute (const char *file_name)
   tid = thread_create (fn_real, PRI_DEFAULT, start_process, fn_copy);
   free(fn_copy2);
 
-//  sema_down(&thread_current()->load_sema);
+//  printf("[Process Execute] before sema_down\n");
+  sema_down(&thread_current()->load_sema);
+//  printf("Parent FREEDOM!!\n");
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
 
@@ -87,16 +89,16 @@ start_process (void *file_name_)
 //  printf("[Debug] before loading check - sema check?\n");
   if (!success)
     {
-//      list_remove(&cur->child_elem);
-//      sema_up(&cur->parent->load_sema);
+      list_remove(&cur->child_elem);
+      sema_up(&cur->parent->load_sema);
       thread_exit ();
     }
   else 
     {
 //      printf("[Debug] Loading Success! before sema_up\n");
-//      sema_up(&cur->parent->load_sema);
+      sema_up(&cur->parent->load_sema);
 //      printf("[Debug] Loading Success! after sema_up\n");
-//      sema_down(&cur->wait_sema);
+      sema_down(&cur->exec_sema);
     }
 
 //  printf("[Debug] after loading check success\n");
@@ -124,11 +126,39 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
-  struct list_elem e;
+//  printf("WAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIt\n");
+  struct thread *cur = thread_current();
+  struct list_elem* e;
+  struct list* child_list = &thread_current()->child_list;
+  struct thread* child = NULL, *c = NULL;
+  for (e = list_begin(child_list); e != list_end(child_list);
+       e = list_next(e))
+    {
+      c = list_entry (e, struct thread, child_elem);
+      if (c->tid == child_tid)
+        {
+          child = c;
+          break;
+        }
+    }
+  
+  if (!child)
+    {
+      return -1;
+    }
+  list_remove(e);
+//  printf("[process_wait] sema up!\n");
+  sema_up (&child->exec_sema);
+//  printf("Child sema UP!\n");
+//  printf("Current(parent) tid : %d | Child tid : %d\n", cur->tid, child->tid);
+  sema_down (&cur->wait_sema);
+//  printf("Parent Waiting END!\n");
+/*  
   int i, j = 1;
   for (i = 0; i < 500000000; i++)
     j = i^j;
-  return 0;
+*/
+  return thread_current()->exit_status;
 }
 
 /* Free the current process's resources. */
