@@ -83,10 +83,7 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   syscall_exit(-1);
                   break;
                 }
-<<<<<<< HEAD
-=======
               // put command line in the system call
->>>>>>> 415b4092793de210122302e197b885d306d47aec
               f->eax = syscall_exec(*(char**)ESP_ARGV_PTR(temp_esp, 0));
             }
           break;
@@ -108,15 +105,9 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   break;
                 }
               f->eax = syscall_read(*(int*)ESP_ARGV3_PTR(temp_esp, 0),
-<<<<<<< HEAD
                            (void*)*(int*)ESP_ARGV3_PTR(temp_esp, 1),
                            (size_t)*(int*)ESP_ARGV3_PTR(temp_esp, 2)
                            );
-=======
-                                    (void*)*(int*)ESP_ARGV3_PTR(temp_esp, 1),
-                                    (size_t)*(int*)ESP_ARGV3_PTR(temp_esp, 2)
-                                   );
->>>>>>> 415b4092793de210122302e197b885d306d47aec
             }
           break;
         case SYS_WRITE:
@@ -129,11 +120,7 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
               f->eax = syscall_write (*(int*)ESP_ARGV3_PTR(temp_esp, 0),
                                       (void*)*(int*)ESP_ARGV3_PTR(temp_esp, 1),
                                       (size_t)*(int*)ESP_ARGV3_PTR(temp_esp, 2)
-<<<<<<< HEAD
                                       );
-=======
-                                     );
->>>>>>> 415b4092793de210122302e197b885d306d47aec
             }
           break;
         case SYS_FIBO: // Calculate fibonacci
@@ -153,17 +140,10 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   syscall_exit(-1);
                   break;
                 }
-<<<<<<< HEAD
               f->eax = syscall_sum_of_four_integers(*(int*)ESP_ARGV3_PTR(temp_esp, 0),
                                                    *(int*)ESP_ARGV3_PTR(temp_esp, 1),
                                                    *(int*)ESP_ARGV3_PTR(temp_esp, 2),
                                                    *(int*)ESP_ARGV3_PTR(temp_esp, 3)
-=======
-              f->eax = syscall_sum_of_four_integers(*(int*)ESP_ARGV3_PTR(temp_esp, 1),
-                                                    *(int*)ESP_ARGV3_PTR(temp_esp, 2),
-                                                    *(int*)ESP_ARGV3_PTR(temp_esp, 3),
-                                                    *(int*)ESP_ARGV3_PTR(temp_esp, 4)
->>>>>>> 415b4092793de210122302e197b885d306d47aec
                                                    );
             }
           break;
@@ -192,41 +172,10 @@ syscall_exit(int status)
   struct thread *cur = thread_current();
 
   //printf("Terminating the current user program!\n");
-<<<<<<< HEAD
   //cur->status = THREAD_DYING;
   cur->exit_status = status;
   printf("%s: exit(%d)\n", cur->name, status);
   cur->normal_termin = true;
-=======
-
-  struct list* child_thread_list_ptr 
-   = &(cur->child_thread_list);
-  struct thread* child = NULL;
-  struct list_elem* e;
-
-  while (!list_empty(&cur->child_thread_list))
-    {
-      struct list_elem *e = list_pop_front(&cur->child_thread_list);
-      child = list_entry(e, struct thread, child_elem);
-      process_wait(child->tid);
-    }
-
-  cur->parent->exit_status = status;
-  cur->normal_termin = true;  // NOTE! no need?
-  printf("%s: exit(%d)\n", cur->name, status);
-
-  sema_down(&cur->wait_sema);
-
-  //  printf("sema_up\n");
-  //  printf("sema_down\n");
-
-
-  //  printf("cur->tid : %d\n\ncur->parent->tid_wait : %d\n\n",cur->tid,
-  //         cur->parent->tid_wait);
-
-//  printf("before thread_exit\n");
-//  printf("pagedir : %p\n", cur->pagedir);
->>>>>>> 415b4092793de210122302e197b885d306d47aec
   thread_exit();
 //  printf("after thread_exit\n");
   return;

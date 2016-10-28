@@ -57,7 +57,7 @@ process_execute (const char *file_name)
   tid = thread_create (fn_real, PRI_DEFAULT, start_process, fn_copy);
   free(fn_copy2);
 
-  sema_down(&thread_current()->load_sema);
+//  sema_down(&thread_current()->load_sema);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
 
@@ -84,22 +84,22 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   palloc_free_page (file_name);
   struct thread * cur = thread_current();
-  printf("[Debug] before loading check - sema check?\n");
+//  printf("[Debug] before loading check - sema check?\n");
   if (!success)
     {
-      list_remove(&cur->child_elem);
-      sema_up(&cur->parent->load_sema);
+//      list_remove(&cur->child_elem);
+//      sema_up(&cur->parent->load_sema);
       thread_exit ();
     }
   else 
     {
-      printf("[Debug] Loading Success! before sema_up\n");
-      sema_up(&cur->parent->load_sema);
-      printf("[Debug] Loading Success! after sema_up\n");
-      sema_down(&cur->wait_sema);
+//      printf("[Debug] Loading Success! before sema_up\n");
+//      sema_up(&cur->parent->load_sema);
+//      printf("[Debug] Loading Success! after sema_up\n");
+//      sema_down(&cur->wait_sema);
     }
 
-  printf("[Debug] after loading check success\n");
+//  printf("[Debug] after loading check success\n");
 
 
   /* Start the user process by simulating a return from an
