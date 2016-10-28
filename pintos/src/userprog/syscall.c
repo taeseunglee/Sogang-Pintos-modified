@@ -189,6 +189,7 @@ syscall_exit(int status)
 pid_t
 syscall_exec(const char *cmd_line)
 {
+  /*
   struct thread *parent = thread_current();
   struct list_elem *e = list_begin(&parent -> child_list);
   struct thread *child = list_entry(e, struct thread, child_elem);
@@ -197,7 +198,7 @@ syscall_exec(const char *cmd_line)
   {
     while(!child->normal_termin);
   }
-  
+  */
   return (pid_t)process_execute(cmd_line);
 }
 

@@ -58,10 +58,16 @@ process_execute (const char *file_name)
   free(fn_copy2);
 
 //  printf("[Process Execute] before sema_down\n");
-  sema_down(&thread_current()->load_sema);
 //  printf("Parent FREEDOM!!\n");
+  sema_down(&thread_current()->load_sema);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
+  
+  struct list_elem* e = list_rbegin(&thread_current()->child_list);
+  struct thread* child_thread = list_entry(e, struct thread, child_elem);
+  
+  if (tid != child_thread->tid)
+    tid = TID_ERROR;
 
   return tid;
 }
