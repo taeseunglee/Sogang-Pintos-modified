@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <syscall-nr.h>
 #include <stdbool.h>
+#include <string.h>
+#include "threads/malloc.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
@@ -29,10 +31,13 @@ static bool is_valid_arg (const void* esp, int argc);
 static bool is_valid_arg3 (const void* esp, int argc);
 
 #ifndef __ESP_ARGV__
+
+#define __ESP_ARGV__
 #define ESP_ARGV_PTR(ESP, INDEX) ((void*)((uintptr_t)(ESP) + ((INDEX) + 1) * 4)) // 4 means sizeof(uintptr_t)
 // #define ESP_ARGC_PTR(ESP) ((void*)((uintptr_t)(ESP) + 4))  // DELETE?
 #define ESP_ARGV3_PTR(ESP, INDEX) ((void*)((uintptr_t)(ESP) + ((INDEX) + 5) * 4)) 
 // #define ESP_ARGC3_PTR(ESP) ((void*)((uintptr_t)(ESP) + 20))
+
 #endif
 
 void
@@ -78,6 +83,7 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   syscall_exit(-1);
                   break;
                 }
+              // put command line in the system call
               f->eax = syscall_exec(*(char**)ESP_ARGV_PTR(temp_esp, 0));
             }
           break;
@@ -168,35 +174,34 @@ syscall_exit(int status)
   //printf("Terminating the current user program!\n");
 
   struct list* child_thread_list_ptr 
-   = &cur->child_thread_list;
+   = &(cur->child_thread_list);
   struct thread* child = NULL;
   struct list_elem* e;
 
-  for (e = list_begin(child_thread_list_ptr); e != list_end(child_thread_list_ptr);
-       e = list_next(e))
+  while (!list_empty(&cur->child_thread_list))
     {
+      struct list_elem *e = list_pop_front(&cur->child_thread_list);
       child = list_entry(e, struct thread, child_elem);
-      printf("In for syscall_exit!!!\n");
-      sema_up(&child->exit_sema);
+      process_wait(child->tid);
     }
 
   cur->parent->exit_status = status;
   cur->normal_termin = true;  // NOTE! no need?
   printf("%s: exit(%d)\n", cur->name, status);
 
+  sema_down(&cur->wait_sema);
+
   //  printf("sema_up\n");
   //  printf("sema_down\n");
-  sema_up (&cur->wait_sema);
-  sema_down (&cur->exit_sema); // wake up parent
+
 
   //  printf("cur->tid : %d\n\ncur->parent->tid_wait : %d\n\n",cur->tid,
   //         cur->parent->tid_wait);
-  //  if (cur->tid == cur->parent->tid_wait) {
-  //      sema_up(&cur->parent->wait_sema);
-  //  }
-  //  printf("before thread_exit\n");
+
+//  printf("before thread_exit\n");
+//  printf("pagedir : %p\n", cur->pagedir);
   thread_exit();
-  //  printf("after thread_exit\n");
+//  printf("after thread_exit\n");
   return;
 }
 
@@ -223,8 +228,8 @@ syscall_read(int fd, void *buffer, unsigned size)
         i++;
       }while(i<size && (*((uint8_t *)buffer + i) != '\0'));
       // }while(i<size && (*((uint8_t *)buffer + i) != '\n' || *((uint8_t *)buffer + i) != '\0'));
-}
-return i;
+  }
+  return i;
 }
 
 int
@@ -257,6 +262,7 @@ syscall_fibonacci(int n)
     }
   return result;
 }
+
 int
 syscall_sum_of_four_integers(int a, int b, int c, int d)
 {

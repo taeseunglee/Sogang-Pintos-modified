@@ -50,7 +50,7 @@ process_execute (const char *file_name)
     return TID_ERROR;
   }
   strlcpy (fn_copy2, file_name, fn_len);
-  
+
   fn_real = strtok_r(fn_copy2, " ", &save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
@@ -59,33 +59,36 @@ process_execute (const char *file_name)
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
-  else 
-    {
-//      printf("process_execute in!!\n");
-      /* Locates a new thread(Child Thread)
-        at child_thread_list of current thread(Parent Thread).
-        When thread_create execute, a new child thread is
-        located at the back of list by list_push_back().
-        So we can get a new child thread using list_end().
-        Since list_pop_back return type is struct list_elem*,
-        we should change this elem to thread by using list_entry().
-      */
-      struct thread *cur = thread_current(), // parent thread (child thread is a new thread.)
-                    *child_thread = NULL;
-      struct list_elem *e = NULL;
 
-//      printf("before sema_down\n");
+  //      printf("process_execute in!!\n");
+  /* Locates a new thread(Child Thread)
+     at child_thread_list of current thread(Parent Thread).
+     When thread_create execute, a new child thread is
+     located at the back of list by list_push_back().
+     So we can get a new child thread using list_end().
+     Since list_pop_back return type is struct list_elem*,
+     we should change this elem to thread by using list_entry().
+     */
+  struct thread *cur = thread_current(), // parent thread (child thread is a new thread.)
+                *child_thread = NULL;
+  struct list_elem *e = NULL;
+  sema_down(&cur->exec_sema); // for start_process and loading
 
-//      printf("after sema_down\n");
-      e = list_rbegin(&cur->child_thread_list);
-      child_thread = list_entry(e, struct thread, child_elem);
-      sema_down(&child_thread->wait_sema); // for start_process and loading
+  // printf("current pid : %d child : %d\n", cur->tid, tid);
+/*
+  e = list_rbegin(&cur->child_thread_list);
+  child_thread = list_entry(e, struct thread, child_elem);
 
 
-      if(child_thread->tid != tid)
-        tid = TID_ERROR;
-      // Now, The New Thread is a executable child thread of current thread! (Load complete!)
-    }
+
+  //    printf("after sema_down : current->pid : %d\n", thread_current()->tid;
+
+  if(child_thread->tid != tid)
+    tid = TID_ERROR;
+  else
+    sema_up(&child_thread->exec_sema);
+    */
+  // Now, The New Thread is a executable child thread of current thread! (Load complete!)
 
   return tid;
 }
@@ -106,16 +109,26 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
+
   /* If load failed, quit. */
   palloc_free_page (file_name);
 
-//  sema_up(&thread_current()->parent->_sema);
-  sema_up(&thread_current()->wait_sema);
+
+  printf("loading!!!!!!!!!!!!!!!!1\n");
+  //  printf("In load tid %d parent : %d\n", cur->tid, cur->parent->tid);
   // NOTE! Do we change to THIS? thread_exit -> syscall_exit()
-  if (!success) {
-    list_remove(&thread_current()->child_elem);
-    syscall_exit(-1);
-  }
+  if (!success)
+    {
+      list_remove(&(thread_current()->child_elem));
+      sema_up(&(thread_current()->parent->exec_sema));
+      thread_exit();
+    //    syscall_exit(-1);
+    }
+  else
+    {
+      sema_up(&thread_current()->parent->exec_sema);
+      sema_down(&thread_current()->exec_sema);
+    }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -139,26 +152,28 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
-//  printf("process_wait!!\n");
+  //  printf("process_wait!!\n");
   /*
-  int i, j = 1;
-  for (i = 0; i < 500000000; i++)
-    j = i^j;
-    */
+     int i, j = 1;
+     for (i = 0; i < 500000000; i++)
+     j = i^j;
+     */
   struct thread *cur = thread_current(),
-                *child = NULL;
+                *child = NULL,
+                *c = NULL;
   struct list_elem *e;
   int exit_status = 0;
-//  int exit_status;
+  //  int exit_status;
 
   for (e = list_begin (&cur->child_thread_list); 
        e != list_end (&cur->child_thread_list);
        e = list_next(e))
     {
-      child = list_entry (e, struct thread, allelem);
-      if (child->tid == child_tid)
+      c = list_entry (e, struct thread, child_elem);
+      if (child->tid == child_tid) {
+        child = c;
         break;
-      child = NULL;
+      }
     }
 
 
@@ -167,30 +182,12 @@ process_wait (tid_t child_tid)
     {
       return -1;
     }
-/*
+
+
   cur->tid_wait = child_tid;
+  exit_status = cur->exit_status;
   sema_down(&cur->wait_sema);
-  list_remove(e);
-*/
-  if (child->status != THREAD_DYING)
-    {
-      sema_down(&child->wait_sema);
-      exit_status = child->exit_status;
-      sema_up(&child->exit_sema);
-    }
-  else
-    {
-      if (child->normal_termin)
-        {
-          exit_status = child->exit_status;
-          sema_up(&child->exit_sema);
-        }
-      else
-        {
-          sema_up(&child->exit_sema);
-          return -1;
-        }
-    }
+  list_remove(&child->child_elem);
 
   // waiting the "child_tid child" until the child is dying
 
@@ -254,37 +251,37 @@ typedef uint16_t Elf32_Half;
 /* Executable header.  See [ELF1] 1-4 to 1-8.
    This appears at the very beginning of an ELF binary. */
 struct Elf32_Ehdr
-  {
-    unsigned char e_ident[16];
-    Elf32_Half    e_type;
-    Elf32_Half    e_machine;
-    Elf32_Word    e_version;
-    Elf32_Addr    e_entry;
-    Elf32_Off     e_phoff;
-    Elf32_Off     e_shoff;
-    Elf32_Word    e_flags;
-    Elf32_Half    e_ehsize;
-    Elf32_Half    e_phentsize;
-    Elf32_Half    e_phnum;
-    Elf32_Half    e_shentsize;
-    Elf32_Half    e_shnum;
-    Elf32_Half    e_shstrndx;
-  };
+{
+  unsigned char e_ident[16];
+  Elf32_Half    e_type;
+  Elf32_Half    e_machine;
+  Elf32_Word    e_version;
+  Elf32_Addr    e_entry;
+  Elf32_Off     e_phoff;
+  Elf32_Off     e_shoff;
+  Elf32_Word    e_flags;
+  Elf32_Half    e_ehsize;
+  Elf32_Half    e_phentsize;
+  Elf32_Half    e_phnum;
+  Elf32_Half    e_shentsize;
+  Elf32_Half    e_shnum;
+  Elf32_Half    e_shstrndx;
+};
 
 /* Program header.  See [ELF1] 2-2 to 2-4.
    There are e_phnum of these, starting at file offset e_phoff
    (see [ELF1] 1-6). */
 struct Elf32_Phdr
-  {
-    Elf32_Word p_type;
-    Elf32_Off  p_offset;
-    Elf32_Addr p_vaddr;
-    Elf32_Addr p_paddr;
-    Elf32_Word p_filesz;
-    Elf32_Word p_memsz;
-    Elf32_Word p_flags;
-    Elf32_Word p_align;
-  };
+{
+  Elf32_Word p_type;
+  Elf32_Off  p_offset;
+  Elf32_Addr p_vaddr;
+  Elf32_Addr p_paddr;
+  Elf32_Word p_filesz;
+  Elf32_Word p_memsz;
+  Elf32_Word p_flags;
+  Elf32_Word p_align;
+};
 
 /* Values for p_type.  See [ELF1] 2-3. */
 #define PT_NULL    0            /* Ignore. */
@@ -339,7 +336,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   }
   strlcpy(fn_copy, file_name, PGSIZE);
-  
+
   argc = get_argc(file_name);
   argv = malloc(argc * sizeof(char*));                // TODO : free
   if (argv == NULL) {
@@ -449,7 +446,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     {
       argv_len = strlen(argv[i]);
       argv_addrs[i] = *esp = *esp - argv_len - 1;
-      
+
       for (j = 0; j < argv_len; ++j, ++(*esp)) {
         *(char *)(*esp) = argv[i][j];
       }
@@ -484,17 +481,17 @@ load (const char *file_name, void (**eip) (void), void **esp)
   *(int*)(*esp) = 0;
   /* construct ESP end */
 
-//  hex_dump((uintptr_t)(*esp), (const char*)*esp, (uintptr_t)PHYS_BASE - (uintptr_t)*esp, 1);
+  //  hex_dump((uintptr_t)(*esp), (const char*)*esp, (uintptr_t)PHYS_BASE - (uintptr_t)*esp, 1);
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
-  
+
   success = true;
 
-//  printf("load success!\n");
+  //  printf("load success!\n");
 
- done:
+done:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
   if (fn_copy)
@@ -531,7 +528,7 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
   /* The segment must not be empty. */
   if (phdr->p_memsz == 0)
     return false;
-  
+
   /* The virtual memory region must both start and end within the
      user address space range. */
   if (!is_user_vaddr ((void *) phdr->p_vaddr))
@@ -560,10 +557,10 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
    UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
    memory are initialized, as follows:
 
-        - READ_BYTES bytes at UPAGE must be read from FILE
-          starting at offset OFS.
+   - READ_BYTES bytes at UPAGE must be read from FILE
+   starting at offset OFS.
 
-        - ZERO_BYTES bytes at UPAGE + READ_BYTES must be zeroed.
+   - ZERO_BYTES bytes at UPAGE + READ_BYTES must be zeroed.
 
    The pages initialized by this function must be writable by the
    user process if WRITABLE is true, read-only otherwise.
