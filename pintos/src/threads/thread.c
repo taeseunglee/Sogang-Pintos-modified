@@ -137,6 +137,8 @@ thread_tick (void)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
+
+
 }
 
 /* Prints thread statistics. */
@@ -166,6 +168,7 @@ tid_t
 thread_create (const char *name, int priority,
                thread_func *function, void *aux) 
 {
+  printf("New thread name : %s\n", name);
   struct thread *t;
   struct kernel_thread_frame *kf;
   struct switch_entry_frame *ef;
@@ -209,11 +212,11 @@ thread_create (const char *name, int priority,
 
   intr_set_level (old_level);
 
+  /* connect with current thread and a new thread */
   struct thread *cur = thread_current();
   t->parent = cur;
   list_push_back (&cur->child_list,
                   &t->child_elem);
-
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -302,6 +305,14 @@ thread_exit (void)
 #ifdef USERPROG
   process_exit ();
 #endif
+
+  if (thread_current()->parent)
+    {
+      list_remove(&thread_current()->child_elem);
+      thread_current()->normal_termin = true;
+      sema_up(&thread_current()->parent->wait_sema);
+      sema_down(&thread_current()->exit_sema);
+    }
 
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us

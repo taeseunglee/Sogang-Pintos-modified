@@ -1,6 +1,8 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <syscall.h>
 #include <stdlib.h>
+
 int main(int argc, char **argv)
 {
   if (argc < 5)
