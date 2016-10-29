@@ -5,13 +5,16 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+#include "threads/vaddr.h"
 #include "userprog/syscall.h"
+#include "userprog/pagedir.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
+bool is_valid_ptr (const void *uaddr);
 
 /* Registers handlers for interrupts that can be caused by user
    programs.
@@ -154,6 +157,8 @@ page_fault (struct intr_frame *f)
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
   syscall_exit(-1);
+
+  // thread_exit?
   //thread_exit();
   // TODO chagne to!!!
   // syscall_exit(); 
@@ -167,3 +172,18 @@ page_fault (struct intr_frame *f)
 */
 }
 
+bool is_valid_ptr (const void *uaddr)
+{
+  if (!uaddr) // NULL
+    return false;
+  if (is_user_vaddr(uaddr))
+    {
+//      printf("is_user_vaddr pass\n");
+      if (pagedir_get_page(thread_current()->pagedir, uaddr))
+      {
+//        printf("final pass!\n");
+        return true;
+      }
+    }
+  return false;
+}

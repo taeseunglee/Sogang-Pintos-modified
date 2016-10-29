@@ -1,5 +1,6 @@
 #include "userprog/syscall.h"
 #include "userprog/process.h"
+#include "userprog/exception.h"
 #include "lib/user/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
@@ -73,6 +74,7 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   break;
                 }
               //              hex_dump((uintptr_t)f->esp, (const char*)f->esp, 330, 1);
+//              printf("[syscall_handler]EXIT!\n");
               syscall_exit(*(int*)ESP_ARGV_PTR(temp_esp, 0));
             }
           break;
@@ -199,6 +201,9 @@ syscall_exec(const char *cmd_line)
     while(!child->normal_termin);
   }
   */
+  if (!is_valid_ptr(cmd_line)) {
+    syscall_exit(-1);
+  }
   return (pid_t)process_execute(cmd_line);
 }
 
@@ -211,6 +216,9 @@ syscall_wait(pid_t pid)
 int
 syscall_read(int fd, void *buffer, unsigned size)
 {
+  if (!is_valid_ptr(buffer)) {
+    syscall_exit(-1);
+  }
   unsigned i=0;
   if(fd == 0)
     {
@@ -271,8 +279,10 @@ is_valid_arg (const void* esp, int argc)
     {
       argv_ptr = ESP_ARGV_PTR(esp, i); // ith argv pointer
 
-      if (!is_user_vaddr(argv_ptr) || !is_user_vaddr((void*)(*(char**)argv_ptr)))
+      if (!is_valid_ptr(argv_ptr)) {//is_valid_ptr((void*)(*(char**)argv_ptr))) {
+//        printf("false...\n");
         return false;
+      }
     }
 
   return true;
@@ -288,8 +298,9 @@ is_valid_arg3 (const void* esp, int argc)
     {
       argv_ptr = ESP_ARGV3_PTR(esp, i); // ith argv pointer
 
-      if (!is_user_vaddr(argv_ptr) || !is_user_vaddr((void*)(*(char**)argv_ptr)))
+      if (!is_valid_ptr(argv_ptr)) {// || !is_valid_ptr((void*)(*(char**)argv_ptr)))
         return false;
+      }
     }
 
   return true;

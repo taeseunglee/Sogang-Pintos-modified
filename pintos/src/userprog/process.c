@@ -32,6 +32,7 @@ int get_argc(const char *filename);
 tid_t
 process_execute (const char *file_name) 
 {
+//  printf("[process_execute] Start\n");
   char *fn_copy, *fn_copy2, *fn_real, *save_ptr;
   int fn_len = 0;
   tid_t tid;
@@ -59,6 +60,7 @@ process_execute (const char *file_name)
 
 //  printf("[Process Execute] before sema_down\n");
 //  printf("Parent FREEDOM!!\n");
+//  printf("[process_execute] before sema_down parent\n");
   sema_down(&thread_current()->load_sema);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
@@ -68,6 +70,10 @@ process_execute (const char *file_name)
   
   if (tid != child_thread->tid)
     tid = TID_ERROR;
+
+//  printf("EXECUTE END!\n");
+//  if (tid == TID_ERROR)
+//    printf("FFFFFFFFFFFFFFFFFF\n");
 
   return tid;
 }
@@ -86,6 +92,7 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+//  printf("[start_process] before load\n");
   success = load (file_name, &if_.eip, &if_.esp);
 
 
@@ -95,6 +102,7 @@ start_process (void *file_name_)
 //  printf("[Debug] before loading check - sema check?\n");
   if (!success)
     {
+//      printf("(DEBUG)[start_process] : load fail\n");
       list_remove(&cur->child_elem);
       sema_up(&cur->parent->load_sema);
       thread_exit ();
@@ -284,6 +292,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
+//  printf("[load] Start\n");
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -301,6 +310,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
+
+//  printf("[load] after process_execute\n");
 
   /* parse filename */
   fn_copy = malloc(strlen(file_name) * sizeof(char)); // TODO : free
@@ -323,14 +334,18 @@ load (const char *file_name, void (**eip) (void), void **esp)
       argv[i] = token;
     }
 
+//  printf("[load] after parsing\n");
 
   /* Open executable file. */
   file = filesys_open (argv[0]);
+//  printf("[load] after open file\n");
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+
+//  printf("[load] before Read executable headers\n");
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -345,6 +360,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
       goto done; 
     }
 
+
+//  printf("[load] before read program headers\n");
   /* Read program headers. */
   file_ofset = ehdr.e_phoff;
   for (i = 0; i < ehdr.e_phnum; i++) 
@@ -403,6 +420,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
           break;
         }
     }
+
+//  printf("[load] before setup_stack\n");
 
   /* Set up stack. */
   if (!setup_stack (esp))
@@ -465,6 +484,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   //  printf("load success!\n");
 
 done:
+//  printf("[load] done start\n");
   /* We arrive here whether the load is successful or not. */
   file_close (file);
   if (fn_copy)
@@ -473,6 +493,8 @@ done:
     free(argv);
   if (argv_addrs)
     free(argv_addrs);
+
+//  printf("[load] real done!\n");
 
   return success;
 }
