@@ -19,7 +19,6 @@
 
 static void syscall_handler (struct intr_frame *);
 void syscall_halt(void);
-void syscall_exit(int status);
 pid_t syscall_exec(const char *cmd_line);
 int syscall_wait(pid_t pid);
 int syscall_read(int fd, void *buffer, unsigned size);
@@ -32,7 +31,7 @@ bool syscall_remove(const char *file);
 int syscall_open(const char *file);
 int syscall_filesize(int fd);
 void syscall_seek(int fd, unsigned position);
-unsigned syscall_tell(int fd);
+off_t syscall_tell(int fd);
 void syscall_close(int fd);
 
 /* syscall handler helper */
@@ -85,7 +84,7 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   break;
                 }
               //              hex_dump((uintptr_t)f->esp, (const char*)f->esp, 330, 1);
-//              printf("[syscall_handler]EXIT!\n");
+              //              printf("[syscall_handler]EXIT!\n");
               syscall_exit(*(int*)ESP_ARGV_PTR(temp_esp, 0));
             }
           break;
@@ -119,7 +118,7 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                 }
               f->eax = syscall_create(*(char**)ESP_ARGV_PTR(temp_esp, 0),
                                       (unsigned)*(int *)ESP_ARGV_PTR(temp_esp,1)
-                                      );
+                                     );
             }
           break;
         case SYS_REMOVE:
@@ -160,9 +159,9 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   break;
                 }
               f->eax = syscall_read(*(int*)ESP_ARGV3_PTR(temp_esp, 0),
-                           (void*)*(int*)ESP_ARGV3_PTR(temp_esp, 1),
-                           (size_t)*(int*)ESP_ARGV3_PTR(temp_esp, 2)
-                           );
+                                    (void*)*(int*)ESP_ARGV3_PTR(temp_esp, 1),
+                                    (size_t)*(int*)ESP_ARGV3_PTR(temp_esp, 2)
+                                   );
             }
           break;
         case SYS_WRITE:
@@ -175,7 +174,7 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
               f->eax = syscall_write (*(int*)ESP_ARGV3_PTR(temp_esp, 0),
                                       (void*)*(int*)ESP_ARGV3_PTR(temp_esp, 1),
                                       (size_t)*(int*)ESP_ARGV3_PTR(temp_esp, 2)
-                                      );
+                                     );
             }
           break;
         case SYS_SEEK:
@@ -187,7 +186,7 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                 }
               syscall_seek(*(int*)ESP_ARGV_PTR(temp_esp, 0),
                            (unsigned)*(int*)ESP_ARGV_PTR(temp_esp, 1)
-                           );
+                          );
             }
           break;
         case SYS_TELL:
@@ -228,9 +227,9 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   break;
                 }
               f->eax = syscall_sum_of_four_integers(*(int*)ESP_ARGV3_PTR(temp_esp, 0),
-                                                   *(int*)ESP_ARGV3_PTR(temp_esp, 1),
-                                                   *(int*)ESP_ARGV3_PTR(temp_esp, 2),
-                                                   *(int*)ESP_ARGV3_PTR(temp_esp, 3)
+                                                    *(int*)ESP_ARGV3_PTR(temp_esp, 1),
+                                                    *(int*)ESP_ARGV3_PTR(temp_esp, 2),
+                                                    *(int*)ESP_ARGV3_PTR(temp_esp, 3)
                                                    );
             }
           break;
@@ -263,13 +262,13 @@ syscall_exit(int status)
   cur->parent->exit_status = status;
   printf("%s: exit(%d)\n", cur->name, status);
   cur->normal_termin = true;
-  
-//  printf("I'm child!\n");
-//  printf("Child tid : %d | Parent tid : %d\n", cur->tid, cur->parent->tid);
+
+  //  printf("I'm child!\n");
+  //  printf("Child tid : %d | Parent tid : %d\n", cur->tid, cur->parent->tid);
   sema_up (&cur->parent->wait_sema);
-//  printf("Wake up my parent!!\n");
+  //  printf("Wake up my parent!!\n");
   thread_exit();
-//  printf("after thread_exit\n");
+  //  printf("after thread_exit\n");
   return;
 }
 
@@ -277,15 +276,15 @@ pid_t
 syscall_exec(const char *cmd_line)
 {
   /*
-  struct thread *parent = thread_current();
-  struct list_elem *e = list_begin(&parent -> child_list);
-  struct thread *child = list_entry(e, struct thread, child_elem);
+     struct thread *parent = thread_current();
+     struct list_elem *e = list_begin(&parent -> child_list);
+     struct thread *child = list_entry(e, struct thread, child_elem);
 
-  if(child->tid == parent->tid)
-  {
-    while(!child->normal_termin);
-  }
-  */
+     if(child->tid == parent->tid)
+     {
+     while(!child->normal_termin);
+     }
+     */
   if (!is_valid_ptr(cmd_line))
     syscall_exit(-1);
 
@@ -306,26 +305,26 @@ syscall_read(int fd, void *buffer, unsigned size)
 
   unsigned i=0;
   if(fd == 0)
-  {
+    {
       do{
         *((uint8_t *)buffer + i) = input_getc();
         i++;
       }while(i<size && (*((uint8_t *)buffer + i) != '\n'));
       // }while(i<size && (*((uint8_t *)buffer + i) != '\n' || *((uint8_t *)buffer + i) != '\0'));
       return i;
-  }
-  else
-  {
-    struct file* file = search_file(fd);
-    if(file == NULL) return -1;
-    
-    int result;
-    lock_acquire(&filesys_lock);
-    result = (int)file_read(file,buffer,(off_t)size);
-    lock_release(&filesys_lock);
-    return result;
-  }
-  return -1;
+}
+else
+{
+  struct file* file = search_file(fd);
+  if(file == NULL) return -1;
+
+  int result;
+  lock_acquire(&filesys_lock);
+  result = (int)file_read(file,buffer,(off_t)size);
+  lock_release(&filesys_lock);
+  return result;
+}
+return -1;
 }
 
 int
@@ -333,7 +332,7 @@ syscall_write(int fd, const void *buffer, unsigned size)
 {
   if (!is_valid_ptr(buffer))
     syscall_exit(-1);
-  
+
   if(fd == 1)
     {
       //for (i = 0; i < size; i++)
@@ -345,7 +344,7 @@ syscall_write(int fd, const void *buffer, unsigned size)
     {
       struct file* file = search_file(fd);
       if(file == NULL) return -1;
-    
+
       int result;
       lock_acquire(&filesys_lock);
       result = (int)file_write(file,buffer,(off_t)size);
@@ -382,7 +381,7 @@ syscall_create(const char *file, unsigned initial_size)
 {
   if (!is_valid_ptr(file) || !(*file))
     syscall_exit(-1);
-  
+
   bool result;
   lock_acquire(&filesys_lock);
   result = filesys_create(file,(off_t)initial_size);
@@ -394,7 +393,7 @@ syscall_remove(const char *file)
 {
   if (!is_valid_ptr(file) || !(*file))
     syscall_exit(-1);
-  
+
   bool result;
   lock_acquire(&filesys_lock);
   result = filesys_remove(file);
@@ -406,60 +405,72 @@ syscall_open(const char *file)
 {
   if (!is_valid_ptr(file) || !(*file))
     syscall_exit(-1);
-  
+
   struct file* op_file;
   lock_acquire(&filesys_lock);
   op_file = filesys_open(file);
   lock_release(&filesys_lock);
 
-  // need initializing
+  return thread_add_file(op_file);
 }
 int
 syscall_filesize(int fd)
 {
-    struct file* file = search_file(fd);
-    if(file == NULL) return -1;
-    
-    int result;
-    lock_acquire(&filesys_lock);
-    result = (int)file_length(file);
-    lock_release(&filesys_lock);
-    return result;
+  struct file* file = search_file(fd);
+  if(file == NULL) return -1;
+
+  int result;
+  lock_acquire(&filesys_lock);
+  result = (int)file_length(file);
+  lock_release(&filesys_lock);
+  return result;
 }
 void
 syscall_seek(int fd, unsigned position)
 {
-    struct file* file = search_file(fd);
-    if(file == NULL) return -1;
-    
-    lock_acquire(&filesys_lock);
-    file_seek(file,(off_t)position);
-    lock_release(&filesys_lock);
-    return ;
+  struct file* file = search_file(fd);
+  if(file == NULL) return;
+
+  lock_acquire(&filesys_lock);
+  file_seek(file,(off_t)position);
+  lock_release(&filesys_lock);
+  return ;
 }
-unsigned
+
+off_t
 syscall_tell(int fd)
 {
-    struct file* file = search_file(fd);
-    if(file == NULL) return -1;
-    
-    unsigned result;
-    lock_acquire(&filesys_lock);
-    result = (unsigned)file_tell(file);
-    lock_release(&filesys_lock);
-    return result;
+  struct file* file = search_file(fd);
+  if(file == NULL) return -1;
+
+  unsigned result;
+  lock_acquire(&filesys_lock);
+  result = (unsigned)file_tell(file);
+  lock_release(&filesys_lock);
+  return result;
 }
 void
 syscall_close(int fd)
 {
-    struct file* file = search_file(fd);
-    if(file == NULL) return -1;
-    
-    lock_acquire(&filesys_lock);
-    file_close(file);
-    lock_release(&filesys_lock);
-    return ;
-    // need freeing
+  struct file* file = search_file(fd);
+  if(file == NULL) syscall_exit(-1);
+
+  lock_acquire(&filesys_lock);
+  file_close(file);
+  lock_release(&filesys_lock);
+
+  struct thread* cur = thread_current();
+  struct list_elem *e, *remove;
+
+  for (e = list_begin(&cur->filelist); e != list_end(&cur->filelist);
+       e = list_next(e))
+    {
+      if (fd == list_entry(e, struct file_list, ptr)->fd)
+        {
+          remove = list_remove(e);
+          free(remove);  
+        }
+    }
 }
 
 // ex) is_valid = is_valid_arg (f->esp);
@@ -473,8 +484,7 @@ is_valid_arg (const void* esp, int argc)
     {
       argv_ptr = ESP_ARGV_PTR(esp, i); // ith argv pointer
 
-      if (!is_valid_ptr(argv_ptr)) {//is_valid_ptr((void*)(*(char**)argv_ptr))) {
-//        printf("false...\n");
+      if (!is_valid_ptr(argv_ptr)) {
         return false;
       }
     }
@@ -506,12 +516,12 @@ struct file* search_file(int fd)
   struct list_elem *chosen = NULL;
 
   for(e = list_begin(&current->filelist); e != list_end(&current->filelist); e = list_next(e))
-  {
-    if(fd == list_entry(e,struct file_list,ptr)->fd)
     {
-      chosen = e;
-      return list_entry(chosen,struct file_list,ptr)->file;
+      if(fd == list_entry(e,struct file_list,ptr)->fd)
+        {
+          chosen = e;
+          return list_entry(chosen,struct file_list,ptr)->file;
+        }
     }
-  }
   return NULL;
 }

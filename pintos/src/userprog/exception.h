@@ -8,5 +8,6 @@
 
 void exception_init (void);
 void exception_print_stats (void);
+bool is_valid_ptr (const void *uaddr);
 
 #endif /* userprog/exception.h */
