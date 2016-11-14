@@ -15,6 +15,17 @@ enum thread_status
     THREAD_DYING        /* About to be destroyed. */
   };
 
+/* Added for accessing file by fd */
+struct file_list
+{
+  int fd;
+  struct file *file;
+  struct list_elem ptr;
+};
+
+/* Lock used for file system - added */
+struct lock filesys_lock;
+
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
@@ -110,6 +121,10 @@ struct thread
     /* Project 2-1 wait and exec */
     struct list child_list;
     struct list_elem child_elem;
+
+    /* Project 2-2 file system */
+    struct list filelist;
+    struct file* cur_file;
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */

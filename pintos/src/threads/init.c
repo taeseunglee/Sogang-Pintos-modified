@@ -125,6 +125,7 @@ main (void)
   ide_init ();
   locate_block_devices ();
   filesys_init (format_filesys);
+  lock_init(&filesys_lock);
 #endif
 
   printf ("Boot complete.\n");
