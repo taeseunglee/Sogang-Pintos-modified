@@ -14,6 +14,8 @@
 #include "devices/shutdown.h"
 #include "devices/input.h"
 #include "lib/kernel/console.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
 
 static void syscall_handler (struct intr_frame *);
 void syscall_halt(void);
@@ -25,11 +27,20 @@ int syscall_write(int fd, const void *buffer, unsigned size);
 int syscall_fibonacci(int n);
 int syscall_sum_of_four_integers(int a, int b, int c, int d);
 
+bool syscall_create(const char *file, unsigned initial_size);
+bool syscall_remove(const char *file);
+int syscall_open(const char *file);
+int syscall_filesize(int fd);
+void syscall_seek(int fd, unsigned position);
+unsigned syscall_tell(int fd);
+void syscall_close(int fd);
+
 /* syscall handler helper */
 // check argc and argv is valid virtual address using esp
 // We only use this function in syscall.c
 static bool is_valid_arg (const void* esp, int argc);
 static bool is_valid_arg3 (const void* esp, int argc);
+struct file* search_file(int fd);
 
 #ifndef __ESP_ARGV__
 
@@ -99,6 +110,48 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
               f->eax = syscall_wait(*(pid_t*)ESP_ARGV_PTR(temp_esp, 0));
             }
           break;
+        case SYS_CREATE:
+            {
+              if (!is_valid_arg (temp_esp, 2))
+                {
+                  syscall_exit(-1);
+                  break;
+                }
+              f->eax = syscall_create(*(char**)ESP_ARGV_PTR(temp_esp, 0),
+                                      (unsigned)*(int *)ESP_ARGV_PTR(temp_esp,1)
+                                      );
+            }
+          break;
+        case SYS_REMOVE:
+            {
+              if (!is_valid_arg (temp_esp, 1))
+                {
+                  syscall_exit(-1);
+                  break;
+                }
+              f->eax = syscall_remove(*(char**)ESP_ARGV_PTR(temp_esp, 0));
+            }
+          break;
+        case SYS_OPEN:
+            {
+              if (!is_valid_arg (temp_esp, 1))
+                {
+                  syscall_exit(-1);
+                  break;
+                }
+              f->eax = syscall_open(*(char**)ESP_ARGV_PTR(temp_esp, 0));
+            }
+          break;
+        case SYS_FILESIZE:
+            {
+              if (!is_valid_arg (temp_esp, 1))
+                {
+                  syscall_exit(-1);
+                  break;
+                }
+              f->eax = syscall_filesize(*(int*)ESP_ARGV_PTR(temp_esp, 0));
+            }
+          break;
         case SYS_READ:
             {
               if (!is_valid_arg3 (temp_esp, 3))
@@ -125,6 +178,38 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                                       );
             }
           break;
+        case SYS_SEEK:
+            {
+              if (!is_valid_arg (temp_esp, 2))
+                {
+                  syscall_exit(-1);
+                  break;
+                }
+              syscall_seek(*(int*)ESP_ARGV_PTR(temp_esp, 0),
+                           (unsigned)*(int*)ESP_ARGV_PTR(temp_esp, 1)
+                           );
+            }
+          break;
+        case SYS_TELL:
+            {
+              if (!is_valid_arg (temp_esp, 1))
+                {
+                  syscall_exit(-1);
+                  break;
+                }
+              f->eax = syscall_tell(*(int*)ESP_ARGV_PTR(temp_esp, 0));
+            }
+          break;
+        case SYS_CLOSE:
+            {
+              if (!is_valid_arg (temp_esp, 1))
+                {
+                  syscall_exit(-1);
+                  break;
+                }
+              syscall_close(*(int*)ESP_ARGV_PTR(temp_esp, 0));
+            }
+          break;
         case SYS_FIBO: // Calculate fibonacci
             {
               if (!is_valid_arg(temp_esp, 1))
@@ -132,7 +217,7 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   syscall_exit(-1);
                   break;
                 }
-              f->eax = syscall_fibonacci (*(int *)ESP_ARGV_PTR(temp_esp, 0));
+              f->eax = syscall_fibonacci (*(int*)ESP_ARGV_PTR(temp_esp, 0));
             }
           break;
         case SYS_SUM: // Sum Of four integers
@@ -201,9 +286,9 @@ syscall_exec(const char *cmd_line)
     while(!child->normal_termin);
   }
   */
-  if (!is_valid_ptr(cmd_line)) {
+  if (!is_valid_ptr(cmd_line))
     syscall_exit(-1);
-  }
+
   return (pid_t)process_execute(cmd_line);
 }
 
@@ -216,34 +301,58 @@ syscall_wait(pid_t pid)
 int
 syscall_read(int fd, void *buffer, unsigned size)
 {
-  if (!is_valid_ptr(buffer)) {
+  if (!is_valid_ptr(buffer))
     syscall_exit(-1);
-  }
+
   unsigned i=0;
   if(fd == 0)
-    {
+  {
       do{
         *((uint8_t *)buffer + i) = input_getc();
         i++;
-      }while(i<size && (*((uint8_t *)buffer + i) != '\0'));
+      }while(i<size && (*((uint8_t *)buffer + i) != '\n'));
       // }while(i<size && (*((uint8_t *)buffer + i) != '\n' || *((uint8_t *)buffer + i) != '\0'));
+      return i;
   }
-  return i;
+  else
+  {
+    struct file* file = search_file(fd);
+    if(file == NULL) return -1;
+    
+    int result;
+    lock_acquire(&filesys_lock);
+    result = (int)file_read(file,buffer,(off_t)size);
+    lock_release(&filesys_lock);
+    return result;
+  }
+  return -1;
 }
 
 int
 syscall_write(int fd, const void *buffer, unsigned size)
 {
-  if(fd == 1 && buffer != NULL)
+  if (!is_valid_ptr(buffer))
+    syscall_exit(-1);
+  
+  if(fd == 1)
     {
       //for (i = 0; i < size; i++)
       //  if(!*((char *)buffer + i)) break;
       putbuf((char *)buffer,(size_t)size);
       return size;
     }
-  // if any error occurs, change to iteration
-  // increasing the size by i
-  return 0;
+  else
+    {
+      struct file* file = search_file(fd);
+      if(file == NULL) return -1;
+    
+      int result;
+      lock_acquire(&filesys_lock);
+      result = (int)file_write(file,buffer,(off_t)size);
+      lock_release(&filesys_lock);
+      return result;
+    }
+  return -1;
 }
 
 int
@@ -266,6 +375,91 @@ int
 syscall_sum_of_four_integers(int a, int b, int c, int d)
 {
   return a+b+c+d;
+}
+
+bool
+syscall_create(const char *file, unsigned initial_size)
+{
+  if (!is_valid_ptr(file) || !(*file))
+    syscall_exit(-1);
+  
+  bool result;
+  lock_acquire(&filesys_lock);
+  result = filesys_create(file,(off_t)initial_size);
+  lock_release(&filesys_lock);
+  return result;
+}
+bool
+syscall_remove(const char *file)
+{
+  if (!is_valid_ptr(file) || !(*file))
+    syscall_exit(-1);
+  
+  bool result;
+  lock_acquire(&filesys_lock);
+  result = filesys_remove(file);
+  lock_release(&filesys_lock);
+  return result;
+}
+int
+syscall_open(const char *file)
+{
+  if (!is_valid_ptr(file) || !(*file))
+    syscall_exit(-1);
+  
+  struct file* op_file;
+  lock_acquire(&filesys_lock);
+  op_file = filesys_open(file);
+  lock_release(&filesys_lock);
+
+  // need initializing
+}
+int
+syscall_filesize(int fd)
+{
+    struct file* file = search_file(fd);
+    if(file == NULL) return -1;
+    
+    int result;
+    lock_acquire(&filesys_lock);
+    result = (int)file_length(file);
+    lock_release(&filesys_lock);
+    return result;
+}
+void
+syscall_seek(int fd, unsigned position)
+{
+    struct file* file = search_file(fd);
+    if(file == NULL) return -1;
+    
+    lock_acquire(&filesys_lock);
+    file_seek(file,(off_t)position);
+    lock_release(&filesys_lock);
+    return ;
+}
+unsigned
+syscall_tell(int fd)
+{
+    struct file* file = search_file(fd);
+    if(file == NULL) return -1;
+    
+    unsigned result;
+    lock_acquire(&filesys_lock);
+    result = (unsigned)file_tell(file);
+    lock_release(&filesys_lock);
+    return result;
+}
+void
+syscall_close(int fd)
+{
+    struct file* file = search_file(fd);
+    if(file == NULL) return -1;
+    
+    lock_acquire(&filesys_lock);
+    file_close(file);
+    lock_release(&filesys_lock);
+    return ;
+    // need freeing
 }
 
 // ex) is_valid = is_valid_arg (f->esp);
@@ -304,4 +498,20 @@ is_valid_arg3 (const void* esp, int argc)
     }
 
   return true;
+}
+struct file* search_file(int fd)
+{
+  struct thread* current = thread_current();
+  struct list_elem *e;
+  struct list_elem *chosen = NULL;
+
+  for(e = list_begin(&current->filelist); e != list_end(&current->filelist); e = list_next(e))
+  {
+    if(fd == list_entry(e,struct file_list,ptr)->fd)
+    {
+      chosen = e;
+      return list_entry(chosen,struct file_list,ptr)->file;
+    }
+  }
+  return NULL;
 }
