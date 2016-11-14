@@ -931,7 +931,7 @@ sub SIGVTALRM {
     foreach my $name (split(' ', $Config{sig_name})) {
 	return $i if $name eq 'VTALRM';
 	$i++;
-   }
+    }
     return 0;
 }
 

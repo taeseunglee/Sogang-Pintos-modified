@@ -171,12 +171,6 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   syscall_exit(-1);
                   break;
                 }
-              /*
-              f->eax = syscall_write (*(int*)ESP_ARGV3_PTR(temp_esp, 0),
-                                      (void*)*(int*)ESP_ARGV3_PTR(temp_esp, 1),
-                                      (size_t)*(int*)ESP_ARGV3_PTR(temp_esp, 2)
-                                     );
-                                     */
               f->eax = syscall_write (*(int*)ESP_ARGV_PTR(temp_esp, 0),
                                       (void*)*(int*)ESP_ARGV_PTR(temp_esp, 1),
                                       (size_t)*(int*)ESP_ARGV_PTR(temp_esp, 2)
@@ -280,8 +274,10 @@ syscall_exit(int status)
     {
       struct list_elem *e = list_pop_front(&cur->filelist);
       fl_temp = list_entry(e, struct file_list, ptr);
+      file_close(fl_temp->file);
       free(fl_temp);
     }
+  file_close(cur->cur_file);
 
   struct thread *parent = cur->parent;
   // To parent. Since I will commit suicide, good by parent. Please forget me.
@@ -295,7 +291,7 @@ syscall_exit(int status)
           break;
         }
     }
-  
+
 
   sema_up (&parent->wait_sema);
   //  printf("Wake up my parent!!\n");
@@ -342,21 +338,20 @@ syscall_read(int fd, void *buffer, unsigned size)
         *((uint8_t *)buffer + i) = input_getc();
         i++;
       }while(i<size && (*((uint8_t *)buffer + i) != '\n'));
-      // }while(i<size && (*((uint8_t *)buffer + i) != '\n' || *((uint8_t *)buffer + i) != '\0'));
       return i;
-}
-else
-{
-  struct file* file = search_file(fd);
-  if(file == NULL) return -1;
+    }
+  else
+    {
+      struct file* file = search_file(fd);
+      if(file == NULL) return -1;
 
-  int result;
-  lock_acquire(&filesys_lock);
-  result = (int)file_read(file,buffer,(off_t)size);
-  lock_release(&filesys_lock);
-  return result;
-}
-return -1;
+      int result;
+      lock_acquire(&filesys_lock);
+      result = (int)file_read(file,buffer,(off_t)size);
+      lock_release(&filesys_lock);
+      return result;
+    }
+  return -1;
 }
 
 int
@@ -532,24 +527,24 @@ is_valid_arg (const void* esp, int argc)
   return true;
 }
 /*
-static bool
-is_valid_arg3 (const void* esp, int argc)
-{
-  int i;
-  void* argv_ptr = NULL;
+   static bool
+   is_valid_arg3 (const void* esp, int argc)
+   {
+   int i;
+   void* argv_ptr = NULL;
 
-  for (i = 0; i < argc; i++)
-    {
-      argv_ptr = ESP_ARGV3_PTR(esp, i); // ith argv pointer
+   for (i = 0; i < argc; i++)
+   {
+   argv_ptr = ESP_ARGV3_PTR(esp, i); // ith argv pointer
 
-      if (!is_valid_ptr(argv_ptr)) {// || !is_valid_ptr((void*)(*(char**)argv_ptr)))
-        return false;
-      }
-    }
+   if (!is_valid_ptr(argv_ptr)) {// || !is_valid_ptr((void*)(*(char**)argv_ptr)))
+   return false;
+   }
+   }
 
-  return true;
-}
-*/
+   return true;
+   }
+   */
 struct file* search_file(int fd)
 {
   struct thread* current = thread_current();
