@@ -38,7 +38,7 @@ void syscall_close(int fd);
 // check argc and argv is valid virtual address using esp
 // We only use this function in syscall.c
 static bool is_valid_arg (const void* esp, int argc);
-static bool is_valid_arg3 (const void* esp, int argc);
+//static bool is_valid_arg3 (const void* esp, int argc);
 struct file* search_file(int fd);
 
 #ifndef __ESP_ARGV__
@@ -46,7 +46,7 @@ struct file* search_file(int fd);
 #define __ESP_ARGV__
 #define ESP_ARGV_PTR(ESP, INDEX) ((void*)((uintptr_t)(ESP) + ((INDEX) + 1) * 4)) // 4 means sizeof(uintptr_t)
 // #define ESP_ARGC_PTR(ESP) ((void*)((uintptr_t)(ESP) + 4))  // DELETE?
-#define ESP_ARGV3_PTR(ESP, INDEX) ((void*)((uintptr_t)(ESP) + ((INDEX) + 5) * 4)) 
+//#define ESP_ARGV3_PTR(ESP, INDEX) ((void*)((uintptr_t)(ESP) + ((INDEX) + 5) * 4)) 
 // #define ESP_ARGC3_PTR(ESP) ((void*)((uintptr_t)(ESP) + 20))
 
 #endif
@@ -153,28 +153,35 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
           break;
         case SYS_READ:
             {
-              if (!is_valid_arg3 (temp_esp, 3))
+              if (!is_valid_arg (temp_esp, 3))
                 {
                   syscall_exit(-1);
                   break;
                 }
-              f->eax = syscall_read(*(int*)ESP_ARGV3_PTR(temp_esp, 0),
-                                    (void*)*(int*)ESP_ARGV3_PTR(temp_esp, 1),
-                                    (size_t)*(int*)ESP_ARGV3_PTR(temp_esp, 2)
+              f->eax = syscall_read(*(int*)ESP_ARGV_PTR(temp_esp, 0),
+                                    (void*)*(int*)ESP_ARGV_PTR(temp_esp, 1),
+                                    (size_t)*(int*)ESP_ARGV_PTR(temp_esp, 2)
                                    );
             }
           break;
         case SYS_WRITE:
             {
-              if (!is_valid_arg3(temp_esp, 3))
+              if (!is_valid_arg(temp_esp, 3))
                 {
                   syscall_exit(-1);
                   break;
                 }
+              /*
               f->eax = syscall_write (*(int*)ESP_ARGV3_PTR(temp_esp, 0),
                                       (void*)*(int*)ESP_ARGV3_PTR(temp_esp, 1),
                                       (size_t)*(int*)ESP_ARGV3_PTR(temp_esp, 2)
                                      );
+                                     */
+              f->eax = syscall_write (*(int*)ESP_ARGV_PTR(temp_esp, 0),
+                                      (void*)*(int*)ESP_ARGV_PTR(temp_esp, 1),
+                                      (size_t)*(int*)ESP_ARGV_PTR(temp_esp, 2)
+                                     );
+
             }
           break;
         case SYS_SEEK:
@@ -221,15 +228,15 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
           break;
         case SYS_SUM: // Sum Of four integers
             {
-              if (!is_valid_arg3(temp_esp, 4))
+              if (!is_valid_arg(temp_esp, 4))
                 {
                   syscall_exit(-1);
                   break;
                 }
-              f->eax = syscall_sum_of_four_integers(*(int*)ESP_ARGV3_PTR(temp_esp, 0),
-                                                    *(int*)ESP_ARGV3_PTR(temp_esp, 1),
-                                                    *(int*)ESP_ARGV3_PTR(temp_esp, 2),
-                                                    *(int*)ESP_ARGV3_PTR(temp_esp, 3)
+              f->eax = syscall_sum_of_four_integers(*(int*)ESP_ARGV_PTR(temp_esp, 0),
+                                                    *(int*)ESP_ARGV_PTR(temp_esp, 1),
+                                                    *(int*)ESP_ARGV_PTR(temp_esp, 2),
+                                                    *(int*)ESP_ARGV_PTR(temp_esp, 3)
                                                    );
             }
           break;
@@ -403,13 +410,18 @@ syscall_remove(const char *file)
 int
 syscall_open(const char *file)
 {
-  if (!is_valid_ptr(file) || !(*file))
+  if (!is_valid_ptr(file))
     syscall_exit(-1);
+  if (!(*file))
+    return -1;
 
   struct file* op_file;
   lock_acquire(&filesys_lock);
   op_file = filesys_open(file);
   lock_release(&filesys_lock);
+
+  if (!op_file)
+    return -1;
 
   return thread_add_file(op_file);
 }
@@ -460,15 +472,18 @@ syscall_close(int fd)
   lock_release(&filesys_lock);
 
   struct thread* cur = thread_current();
-  struct list_elem *e, *remove;
+  struct list_elem *e;
+  struct file_list *ftemp;
 
   for (e = list_begin(&cur->filelist); e != list_end(&cur->filelist);
        e = list_next(e))
     {
-      if (fd == list_entry(e, struct file_list, ptr)->fd)
+      ftemp = list_entry(e, struct file_list, ptr);
+      if (fd == ftemp->fd)
         {
-          remove = list_remove(e);
-          free(remove);  
+          list_remove(e);
+          free(ftemp);
+          break;
         }
     }
 }
@@ -491,7 +506,7 @@ is_valid_arg (const void* esp, int argc)
 
   return true;
 }
-
+/*
 static bool
 is_valid_arg3 (const void* esp, int argc)
 {
@@ -509,6 +524,7 @@ is_valid_arg3 (const void* esp, int argc)
 
   return true;
 }
+*/
 struct file* search_file(int fd)
 {
   struct thread* current = thread_current();
