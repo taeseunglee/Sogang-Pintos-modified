@@ -263,6 +263,7 @@ void
 syscall_exit(int status)
 {
   struct thread *cur = thread_current();
+  struct file_list *fl_temp;
 
   //printf("Terminating the current user program!\n");
   //cur->status = THREAD_DYING;
@@ -272,7 +273,31 @@ syscall_exit(int status)
 
   //  printf("I'm child!\n");
   //  printf("Child tid : %d | Parent tid : %d\n", cur->tid, cur->parent->tid);
-  sema_up (&cur->parent->wait_sema);
+
+  /* remove all files of the current thread */
+  struct list_elem *e;
+  while (!list_empty(&cur->filelist))
+    {
+      struct list_elem *e = list_pop_front(&cur->filelist);
+      fl_temp = list_entry(e, struct file_list, ptr);
+      free(fl_temp);
+    }
+
+  struct thread *parent = cur->parent;
+  // To parent. Since I will commit suicide, good by parent. Please forget me.
+  for (e = list_begin(&parent->child_list); e != list_end(&parent->child_list);
+       e = list_next(e))
+    {
+      struct thread *c = list_entry (e, struct thread, child_elem);
+      if (c->tid == cur->tid)
+        {
+          list_remove(e);
+          break;
+        }
+    }
+  
+
+  sema_up (&parent->wait_sema);
   //  printf("Wake up my parent!!\n");
   thread_exit();
   //  printf("after thread_exit\n");

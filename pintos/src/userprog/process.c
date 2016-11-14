@@ -141,11 +141,11 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
-//  printf("WAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIt\n");
   struct thread *cur = thread_current();
   struct list_elem* e;
   struct list* child_list = &thread_current()->child_list;
   struct thread* child = NULL, *c = NULL;
+
   for (e = list_begin(child_list); e != list_end(child_list);
        e = list_next(e))
     {
@@ -161,7 +161,6 @@ process_wait (tid_t child_tid)
     {
       return -1;
     }
-  list_remove(e);
 //  printf("[process_wait] sema up!\n");
   sema_up (&child->exec_sema);
 //  printf("Child sema UP!\n");
@@ -489,13 +488,18 @@ load (const char *file_name, void (**eip) (void), void **esp)
 done:
 //  printf("[load] done start\n");
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
   if (fn_copy)
     free(fn_copy);
   if (argv)
     free(argv);
   if (argv_addrs)
     free(argv_addrs);
+
+  if (success)
+    {
+      file_deny_write(file);
+      t->cur_file = file;
+    }
 
 //  printf("[load] real done!\n");
 
