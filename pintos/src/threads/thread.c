@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -69,6 +70,7 @@ static bool is_thread (struct thread *) UNUSED;
 static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
+static bool taf_less (const struct list_elem *a, const struct list_elem *b, void* aux UNUSED);
 static tid_t allocate_tid (void);
 
 /* Initializes the threading system by transforming the code
@@ -597,7 +599,42 @@ allocate_tid (void)
 
   return tid;
 }
-
+
+static bool
+taf_less (const struct list_elem *a, const struct list_elem *b, void* aux UNUSED)
+{
+  return list_entry(a, struct file_list, ptr)->fd
+   < list_entry(b, struct file_list, ptr)->fd;
+}
+
+int
+thread_add_file (struct file *file)
+{
+  struct thread* cur = thread_current();
+  int fd = 2; // 0 : stdin, 1 : stdout, pintos does not use stderr
+  struct list_elem *e;
+
+  /* find a file descriptor that doesn't allocated */
+  for (e = list_begin(&cur->filelist); e != list_end(&cur->filelist);
+       e = list_next(e))
+    {
+      if (fd == list_entry(e, struct file_list, ptr)->fd)
+        ++fd;
+      else
+        break;
+    }
+  if (fd >= 128)
+    return -1;
+
+  struct file_list *fl = malloc (sizeof(struct file_list));
+  fl->fd = fd;
+  fl->file = file;
+  
+  list_insert_ordered (&cur->filelist, &fl->ptr, taf_less, NULL);
+
+  return fd;
+}
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
