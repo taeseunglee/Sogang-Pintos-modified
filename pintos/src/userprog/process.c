@@ -20,6 +20,7 @@
 #include "threads/vaddr.h"
 
 #include "threads/malloc.h"
+#include "threads/synch.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -337,7 +338,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
 //  printf("[load] after parsing\n");
 
   /* Open executable file. */
+  lock_acquire(&filesys_lock);
   file = filesys_open (argv[0]);
+  lock_release(&filesys_lock);
 //  printf("[load] after open file\n");
   if (file == NULL) 
     {
