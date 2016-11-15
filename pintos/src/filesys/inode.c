@@ -332,7 +332,6 @@ inode_deny_write (struct inode *inode)
 void
 inode_allow_write (struct inode *inode) 
 {
-  printf("inode->deny_write_cnt : %d\ninode->open_cnt : %d\n", inode->deny_write_cnt, inode->open_cnt);
   ASSERT (inode->deny_write_cnt > 0);
   ASSERT (inode->deny_write_cnt <= inode->open_cnt);
   inode->deny_write_cnt--;

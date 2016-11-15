@@ -277,7 +277,10 @@ syscall_exit(int status)
       file_close(fl_temp->file);
       free(fl_temp);
     }
+  lock_acquire(&filesys_lock);
   file_close(cur->cur_file);
+  lock_release(&filesys_lock);
+
 
   struct thread *parent = cur->parent;
   // To parent. Since I will commit suicide, good by parent. Please forget me.
@@ -303,8 +306,7 @@ syscall_exit(int status)
 pid_t
 syscall_exec(const char *cmd_line)
 {
-  /*
-     struct thread *parent = thread_current();
+     /*
      struct list_elem *e = list_begin(&parent -> child_list);
      struct thread *child = list_entry(e, struct thread, child_elem);
 

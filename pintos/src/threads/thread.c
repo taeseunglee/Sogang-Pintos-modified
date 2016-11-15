@@ -629,7 +629,7 @@ thread_add_file (struct file *file)
   struct file_list *fl = malloc (sizeof(struct file_list));
   fl->fd = fd;
   fl->file = file;
-  
+ 
   list_insert_ordered (&cur->filelist, &fl->ptr, taf_less, NULL);
 
   return fd;

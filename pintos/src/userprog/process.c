@@ -22,6 +22,9 @@
 #include "threads/malloc.h"
 #include "threads/synch.h"
 
+// for Debug
+#include "filesys/file.h"
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 int get_argc(const char *filename);
@@ -33,10 +36,11 @@ int get_argc(const char *filename);
 tid_t
 process_execute (const char *file_name) 
 {
-//  printf("[process_execute] Start\n");
+  //  printf("[process_execute] Start\n");
   char *fn_copy, *fn_copy2, *fn_real, *save_ptr;
   int fn_len = 0;
   tid_t tid;
+  struct thread* cur = thread_current();
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -45,36 +49,56 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  fn_len = strlen(file_name) + 1;
-  fn_copy2 = malloc(fn_len * sizeof(char));
-  if (fn_copy2 == NULL) {
-    //printf("[process_execute] malloc failed\n");
-    return TID_ERROR;
+  /*
+     fn_len = strlen(file_name) + 1;
+     fn_copy2 = malloc(fn_len * sizeof(char));
+     if (fn_copy2 == NULL) {
+  //printf("[process_execute] malloc failed\n");
+  return TID_ERROR;
   }
   strlcpy (fn_copy2, file_name, fn_len);
 
   fn_real = strtok_r(fn_copy2, " ", &save_ptr);
+  */
 
+  fn_copy2 = malloc (40);
+  fn_copy2 = palloc_get_page(0);
+  if(fn_copy2 == NULL)
+    return TID_ERROR;
+
+//  printf("filename : %s\n", file_name);
+  
+  int i;
+  for (i = 0; file_name[i] && file_name[i] != ' ' && file_name[i] != '\t' ; i++)
+    {
+      fn_copy2[i] = file_name[i];
+    }
+  fn_copy2[i] = 0;
+
+//  printf("fn_copy2 : %s\n", fn_copy2);
+
+  tid = thread_create (fn_copy2, PRI_DEFAULT, start_process, fn_copy);
+  palloc_free_page(fn_copy2);
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (fn_real, PRI_DEFAULT, start_process, fn_copy);
-  free(fn_copy2);
+  //  tid = thread_create (fn_copy2, PRI_DEFAULT, start_process, fn_copy);
+  //  free(fn_copy2);
 
-//  printf("[Process Execute] before sema_down\n");
-//  printf("Parent FREEDOM!!\n");
-//  printf("[process_execute] before sema_down parent\n");
-  sema_down(&thread_current()->load_sema);
+  //  printf("[Process Execute] before sema_down\n");
+  //  printf("Parent FREEDOM!!\n");
+  //  printf("[process_execute] before sema_down parent\n");
+  sema_down(&(cur->load_sema));
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
-  
+
   struct list_elem* e = list_rbegin(&thread_current()->child_list);
   struct thread* child_thread = list_entry(e, struct thread, child_elem);
-  
+
   if (tid != child_thread->tid)
     tid = TID_ERROR;
 
-//  printf("EXECUTE END!\n");
-//  if (tid == TID_ERROR)
-//    printf("FFFFFFFFFFFFFFFFFF\n");
+  //  printf("EXECUTE END!\n");
+  //  if (tid == TID_ERROR)
+  //    printf("FFFFFFFFFFFFFFFFFF\n");
 
   return tid;
 }
@@ -93,30 +117,30 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-//  printf("[start_process] before load\n");
+  //  printf("[start_process] before load\n");
   success = load (file_name, &if_.eip, &if_.esp);
 
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   struct thread * cur = thread_current();
-//  printf("[Debug] before loading check - sema check?\n");
+  //  printf("[Debug] before loading check - sema check?\n");
   if (!success)
     {
-//      printf("(DEBUG)[start_process] : load fail\n");
+      //      printf("(DEBUG)[start_process] : load fail\n");
       list_remove(&cur->child_elem);
       sema_up(&cur->parent->load_sema);
       thread_exit ();
     }
   else 
     {
-//      printf("[Debug] Loading Success! before sema_up\n");
+      //      printf("[Debug] Loading Success! before sema_up\n");
       sema_up(&cur->parent->load_sema);
-//      printf("[Debug] Loading Success! after sema_up\n");
+      //      printf("[Debug] Loading Success! after sema_up\n");
       sema_down(&cur->exec_sema);
     }
 
-//  printf("[Debug] after loading check success\n");
+  //  printf("[Debug] after loading check success\n");
 
 
   /* Start the user process by simulating a return from an
@@ -156,22 +180,22 @@ process_wait (tid_t child_tid)
           break;
         }
     }
-  
+
   if (!child)
     {
       return -1;
     }
-//  printf("[process_wait] sema up!\n");
+  //  printf("[process_wait] sema up!\n");
   sema_up (&child->exec_sema);
-//  printf("Child sema UP!\n");
-//  printf("Current(parent) tid : %d | Child tid : %d\n", cur->tid, child->tid);
+  //  printf("Child sema UP!\n");
+  //  printf("Current(parent) tid : %d | Child tid : %d\n", cur->tid, child->tid);
   sema_down (&cur->wait_sema);
-//  printf("Parent Waiting END!\n");
-/*  
-  int i, j = 1;
-  for (i = 0; i < 500000000; i++)
-    j = i^j;
-*/
+  //  printf("Parent Waiting END!\n");
+  /*  
+      int i, j = 1;
+      for (i = 0; i < 500000000; i++)
+      j = i^j;
+      */
   return thread_current()->exit_status;
 }
 
@@ -292,7 +316,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
-//  printf("[load] Start\n");
+  //  printf("[load] Start\n");
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -300,9 +324,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
   bool success = false;
   int i;
   int argc = 0;
-  char **argv = NULL,
-       *token = NULL, *save_ptr = NULL,
-       *fn_copy = NULL;
+//  char **argv = NULL;
+//  char *token = NULL, *save_ptr = NULL;
+  char *fn_copy = NULL;
   void **argv_addrs = NULL;
 
   /* Allocate and activate page directory. */
@@ -311,43 +335,60 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
-//  printf("[load] after process_execute\n");
+  //  printf("[load] after process_execute\n");
 
   /* parse filename */
-  fn_copy = malloc(strlen(file_name) * sizeof(char)); // TODO : free
-  if (fn_copy == NULL) {
-    printf ("(malloc)filename copy failed in process.c\n");
-    goto done;
-  }
-  strlcpy(fn_copy, file_name, PGSIZE);
+  /*
+     fn_copy = palloc_get_page(0);
+     if (fn_copy == NULL) {
+     printf ("(malloc)filename copy failed in process.c\n");
+     goto done;
+     }
+     strlcpy(fn_copy, file_name, PGSIZE);
 
-  argc = get_argc(file_name);
-  argv = malloc(argc * sizeof(char*));                // TODO : free
-  if (argv == NULL) {
-    printf ("(malloc)argv failed in process.c\n");
-    goto done;
-  }
+     argc = get_argc(file_name);
+     argv = malloc(argc * sizeof(char*));                // TODO : free
+     if (argv == NULL) {
+     printf ("(malloc)argv failed in process.c\n");
+     goto done;
+     }
 
-  for (i = 0, token = strtok_r (fn_copy, " ", &save_ptr); token != NULL;
-       i++, token = strtok_r (NULL, " ", &save_ptr))
+     for (i = 0, token = strtok_r (fn_copy, " ", &save_ptr); token != NULL;
+     i++, token = strtok_r (NULL, " ", &save_ptr))
+     {
+     argv[i] = token;
+     }
+     */
+  //  printf("[load] after parsing\n");
+
+  // XXX: Argument passing
+  char *argv[64];  // 64-> max 128bytes.
     {
-      argv[i] = token;
+      char *token, *last;
+      token = strtok_r((char *)file_name, " ", &last);
+      argv[argc] = (char *)malloc(1 * sizeof(char *));
+      strlcpy(argv[argc++], token, strlen(token) + 1);
+      while(strlen(last)){
+        //printf("[%d]left\n", strlen(last));
+        token = strtok_r(NULL, " ", &last);
+        argv[argc] = (char *)malloc(1 * sizeof(char *));
+        strlcpy(argv[argc++], token, strlen(token) + 1);
+        //printf("'%s'\n", argv[argc-1]);
+      }
     }
-
-//  printf("[load] after parsing\n");
 
   /* Open executable file. */
   lock_acquire(&filesys_lock);
   file = filesys_open (argv[0]);
   lock_release(&filesys_lock);
-//  printf("[load] after open file\n");
+  //  printf("[load] after open file\n");
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
 
-//  printf("[load] before Read executable headers\n");
+  //  printf("[load] before Read executable headers\n");
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -363,7 +404,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
 
-//  printf("[load] before read program headers\n");
+  //  printf("[load] before read program headers\n");
   /* Read program headers. */
   file_ofset = ehdr.e_phoff;
   for (i = 0; i < ehdr.e_phnum; i++) 
@@ -423,7 +464,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
         }
     }
 
-//  printf("[load] before setup_stack\n");
+  //  printf("[load] before setup_stack\n");
 
   /* Set up stack. */
   if (!setup_stack (esp))
@@ -486,12 +527,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
   //  printf("load success!\n");
 
 done:
-//  printf("[load] done start\n");
+  //  printf("[load] done start\n");
   /* We arrive here whether the load is successful or not. */
-  if (fn_copy)
-    free(fn_copy);
-  if (argv)
-    free(argv);
+//  if (fn_copy)
+//    free(fn_copy);
+//  if (argv)
+//    free(argv);
   if (argv_addrs)
     free(argv_addrs);
 
@@ -501,7 +542,7 @@ done:
       t->cur_file = file;
     }
 
-//  printf("[load] real done!\n");
+  //  printf("[load] real done!\n");
 
   return success;
 }
