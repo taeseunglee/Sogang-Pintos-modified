@@ -45,9 +45,6 @@ struct file* search_file(int fd);
 
 #define __ESP_ARGV__
 #define ESP_ARGV_PTR(ESP, INDEX) ((void*)((uintptr_t)(ESP) + ((INDEX) + 1) * 4)) // 4 means sizeof(uintptr_t)
-// #define ESP_ARGC_PTR(ESP) ((void*)((uintptr_t)(ESP) + 4))  // DELETE?
-//#define ESP_ARGV3_PTR(ESP, INDEX) ((void*)((uintptr_t)(ESP) + ((INDEX) + 5) * 4)) 
-// #define ESP_ARGC3_PTR(ESP) ((void*)((uintptr_t)(ESP) + 20))
 
 #endif
 
@@ -63,9 +60,9 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
   int sysnum = *(int *)f->esp;
   void *temp_esp = f->esp;
 
-  /* Debugging */
-  //  hex_dump((uintptr_t)f->esp, (const char*)f->esp, 330, 1);
 
+  // handle a variety of system calls
+  // access to system call by esp pointer in intr_frame
   // check that syscall number is valid
   if (-1 < sysnum && sysnum < NUM_SYSCALL)
     {
@@ -83,8 +80,6 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
                   syscall_exit(-1);
                   break;
                 }
-              //              hex_dump((uintptr_t)f->esp, (const char*)f->esp, 330, 1);
-              //              printf("[syscall_handler]EXIT!\n");
               syscall_exit(*(int*)ESP_ARGV_PTR(temp_esp, 0));
             }
           break;
@@ -236,13 +231,6 @@ syscall_handler (struct intr_frame *f /* UNUSED */)
           break;
         }
     }
-
-
-  //  printf ("system call!\n");
-  //  thread_exit ();
-
-  // need to handle a variety of system calls
-  // access to system call by esp pointer in intr_frame
 }
 
 
@@ -259,14 +247,8 @@ syscall_exit(int status)
   struct thread *cur = thread_current();
   struct file_list *fl_temp;
 
-  //printf("Terminating the current user program!\n");
-  //cur->status = THREAD_DYING;
   cur->parent->exit_status = status;
   printf("%s: exit(%d)\n", cur->name, status);
-  cur->normal_termin = true;
-
-  //  printf("I'm child!\n");
-  //  printf("Child tid : %d | Parent tid : %d\n", cur->tid, cur->parent->tid);
 
   /* remove all files of the current thread */
   struct list_elem *e;
@@ -297,24 +279,12 @@ syscall_exit(int status)
 
 
   sema_up (&parent->wait_sema);
-  //  printf("Wake up my parent!!\n");
   thread_exit();
-  //  printf("after thread_exit\n");
-  return;
 }
 
 pid_t
 syscall_exec(const char *cmd_line)
 {
-     /*
-     struct list_elem *e = list_begin(&parent -> child_list);
-     struct thread *child = list_entry(e, struct thread, child_elem);
-
-     if(child->tid == parent->tid)
-     {
-     while(!child->normal_termin);
-     }
-     */
   if (!is_valid_ptr(cmd_line))
     syscall_exit(-1);
 
@@ -510,7 +480,6 @@ syscall_close(int fd)
     }
 }
 
-// ex) is_valid = is_valid_arg (f->esp);
 static bool
 is_valid_arg (const void* esp, int argc)
 {
@@ -528,38 +497,16 @@ is_valid_arg (const void* esp, int argc)
 
   return true;
 }
-/*
-   static bool
-   is_valid_arg3 (const void* esp, int argc)
-   {
-   int i;
-   void* argv_ptr = NULL;
 
-   for (i = 0; i < argc; i++)
-   {
-   argv_ptr = ESP_ARGV3_PTR(esp, i); // ith argv pointer
-
-   if (!is_valid_ptr(argv_ptr)) {// || !is_valid_ptr((void*)(*(char**)argv_ptr)))
-   return false;
-   }
-   }
-
-   return true;
-   }
-   */
 struct file* search_file(int fd)
 {
   struct thread* current = thread_current();
   struct list_elem *e;
-  struct list_elem *chosen = NULL;
 
   for(e = list_begin(&current->filelist); e != list_end(&current->filelist); e = list_next(e))
     {
       if(fd == list_entry(e,struct file_list,ptr)->fd)
-        {
-          chosen = e;
-          return list_entry(chosen,struct file_list,ptr)->file;
-        }
+          return list_entry(e,struct file_list,ptr)->file;
     }
   return NULL;
 }

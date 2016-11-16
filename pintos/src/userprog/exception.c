@@ -158,10 +158,7 @@ page_fault (struct intr_frame *f UNUSED)
      which fault_addr refers. */
   syscall_exit(-1);
 
-  // thread_exit?
   //thread_exit();
-  // TODO chagne to!!!
-  // syscall_exit(); 
   /*
   printf ("Page fault at %p: %s error %s page in %s context.\n",
           fault_addr,
