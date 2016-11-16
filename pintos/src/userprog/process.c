@@ -37,7 +37,6 @@ tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy, *fn_copy2;
-  int fn_len = 0;
   tid_t tid;
   struct thread* cur = thread_current();
 
@@ -283,9 +282,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofset;
   bool success = false;
   int i;
-  int argc = 0;
   char *fn_copy = NULL;
   void **argv_addrs = NULL;
+  char **argv = NULL;
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -293,40 +292,27 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
-  /*
-     fn_copy = palloc_get_page(0);
-     if (fn_copy == NULL) {
-     printf ("(malloc)filename copy failed in process.c\n");
-     goto done;
-     }
-     strlcpy(fn_copy, file_name, PGSIZE);
+  fn_copy = palloc_get_page(0);
+  if (fn_copy == NULL) {
+    printf ("(malloc)filename copy failed in process.c\n");
+    goto done;
+  }
+  strlcpy(fn_copy, file_name, PGSIZE);
 
-     argc = get_argc(file_name);
-     argv = malloc(argc * sizeof(char*));                // TODO : free
-     if (argv == NULL) {
-     printf ("(malloc)argv failed in process.c\n");
-     goto done;
-     }
+  int argc = get_argc(file_name);
+  argv = malloc(argc * sizeof(char*));
+  //for(i=0;i<argc;i++)
+  //  argv[i] = NULL;
+  if (argv == NULL) {
+    printf ("(malloc)argv failed in process.c\n");
+    goto done;
+  }
 
-     for (i = 0, token = strtok_r (fn_copy, " ", &save_ptr); token != NULL;
-     i++, token = strtok_r (NULL, " ", &save_ptr))
-     {
-     argv[i] = token;
-     }
-     */
-
-  // XXX: Argument passing
-  char *argv[64];  // 64-> max 128bytes.
+  char *token, *save_ptr;
+  for (i = 0, token = strtok_r (fn_copy, " ", &save_ptr); token != NULL;
+       i++, token = strtok_r (NULL, " ", &save_ptr))
     {
-      char *token, *last;
-      token = strtok_r((char *)file_name, " ", &last);
-      argv[argc] = (char *)malloc(1 * sizeof(char *));
-      strlcpy(argv[argc++], token, strlen(token) + 1);
-      while(strlen(last)){
-        token = strtok_r(NULL, " ", &last);
-        argv[argc] = (char *)malloc(1 * sizeof(char *));
-        strlcpy(argv[argc++], token, strlen(token) + 1);
-      }
+      argv[i] = token;
     }
 
   /* Open executable file. */
@@ -470,10 +456,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 done:
   /* We arrive here whether the load is successful or not. */
-//  if (fn_copy)
-//    free(fn_copy);
-//  if (argv)
-//    free(argv);
+  if (fn_copy)
+    palloc_free_page (fn_copy);
+  if (argv)
+    free(argv);
   if (argv_addrs)
     free(argv_addrs);
 
