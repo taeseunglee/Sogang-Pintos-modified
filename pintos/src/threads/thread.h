@@ -113,7 +113,6 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
 #endif
     int exit_status;
-    bool normal_termin;
 
     struct semaphore load_sema;
     struct semaphore wait_sema;
