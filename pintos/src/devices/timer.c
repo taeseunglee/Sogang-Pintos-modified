@@ -89,6 +89,11 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
+  // Project 1. threads. Reimplement it to busy wait.
+  // while loop --> time checking. 
+  // elapsed < ticks : block 
+  // elapsed > ticks : insert thread into ready queue.
+  // compute recent cpu, load_avg, nice ...
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
