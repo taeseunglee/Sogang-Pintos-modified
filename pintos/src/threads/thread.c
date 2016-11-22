@@ -55,6 +55,11 @@ static long long user_ticks;    /* # of timer ticks in user programs. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
+#ifndef USERPROG
+/* For project 1 */
+bool thread_prior_aging;
+#endif
+
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -72,6 +77,7 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static bool taf_less (const struct list_elem *a, const struct list_elem *b, void* aux UNUSED);
 static tid_t allocate_tid (void);
+static void thread_aging (void);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -139,6 +145,10 @@ thread_tick (void)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
+
+  /* For project 1 */
+  if (thread_prior_aging)
+    thread_aging();
 }
 
 /* Prints thread statistics. */
@@ -630,6 +640,12 @@ thread_add_file (struct file *file)
   list_insert_ordered (&cur->filelist, &fl->ptr, taf_less, NULL);
 
   return fd;
+}
+
+static void
+thread_aging (void)
+{
+  /* Not yet implemented */
 }
 
 /* Offset of `stack' member within `struct thread'.
