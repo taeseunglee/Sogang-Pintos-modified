@@ -12,6 +12,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
+#include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -24,6 +25,7 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+static struct list block_list;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -68,6 +70,7 @@ bool thread_mlfqs;
 static void kernel_thread (thread_func *, void *aux);
 
 static void idle (void *aux UNUSED);
+static void thread_wake(void);
 static struct thread *running_thread (void);
 static struct thread *next_thread_to_run (void);
 static void init_thread (struct thread *, const char *name, int priority);
@@ -78,6 +81,8 @@ void thread_schedule_tail (struct thread *prev);
 static bool taf_less (const struct list_elem *a, const struct list_elem *b, void* aux UNUSED);
 static tid_t allocate_tid (void);
 static void thread_aging (void);
+static bool block_less (const struct list_elem *a, const struct list_elem *b, void *aux);
+static bool ready_less (const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -99,6 +104,7 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
+  list_init (&block_list);
   list_init (&all_list);
 
   /* Set up a thread structure for the running thread. */
@@ -108,6 +114,25 @@ thread_init (void)
   initial_thread->tid = allocate_tid ();
 }
 
+static void
+thread_wake()
+{
+  int64_t cur_ticks = timer_ticks();
+  struct list_elem *e = list_begin(&block_list);
+
+  while (e != NULL)
+    {
+      struct thread *t = list_entry(e, struct thread, elem);
+      if (t->ticks < cur_ticks)
+        {
+          thread_unblock(t);
+          list_pop_front(&block_list);
+          e = list_begin(&block_list);
+        }
+      else
+        break;
+    }
+}
 /* Starts preemptive thread scheduling by enabling interrupts.
    Also creates the idle thread. */
 void
@@ -147,8 +172,11 @@ thread_tick (void)
     intr_yield_on_return ();
 
   /* For project 1 */
+#ifndef USERPROG
+  thread_wake();
   if (thread_prior_aging)
     thread_aging();
+#endif
 }
 
 /* Prints thread statistics. */
@@ -263,7 +291,9 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  // XXX : list_insert_ordered!
+//  list_push_back (&ready_list, &t->elem);
+  list_insert_ordered(&ready_list, &t->elem, ready_less, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -334,7 +364,8 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+// XXX : list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered(&ready_list, &cur->elem, ready_less, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -357,11 +388,12 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
-/* Sets the current thread's priority to NEW_PRIORITY. */
 void
-thread_set_priority (int new_priority) 
+thread_sleep(int64_t ticks)
 {
-  thread_current ()->priority = new_priority;
+  struct thread *cur = thread_current();
+  cur->ticks = ticks;
+  list_insert_ordered(&block_list, &cur->elem, block_less, NULL);
 }
 
 /* Returns the current thread's priority. */
@@ -369,6 +401,13 @@ int
 thread_get_priority (void) 
 {
   return thread_current ()->priority;
+}
+
+/* Sets the current thread's priority to NEW_PRIORITY. */
+void
+thread_set_priority (int new_priority) 
+{
+  thread_current ()->priority = new_priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -401,7 +440,7 @@ thread_get_recent_cpu (void)
   /* Not yet implemented. */
   return 0;
 }
-
+
 /* Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by
@@ -646,6 +685,20 @@ static void
 thread_aging (void)
 {
   /* Not yet implemented */
+}
+
+static bool
+block_less (const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+  return list_entry(a, struct thread, elem)->ticks
+   < list_entry(b, struct thread, elem)->ticks;
+}
+
+static bool
+ready_less (const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+  return list_entry(a, struct thread, elem)->priority >
+   list_entry(b, struct thread, elem)->priority;
 }
 
 /* Offset of `stack' member within `struct thread'.

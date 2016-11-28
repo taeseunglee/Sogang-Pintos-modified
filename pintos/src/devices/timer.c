@@ -89,16 +89,23 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  // Project 1. threads. Reimplement it to busy wait.
+  // Project 1. threads. Reimplement it to avoid busy wait.
   // while loop --> time checking. 
   // elapsed < ticks : block 
-  // elapsed > ticks : insert thread into ready queue.
+  // elapsed >= ticks : insert thread into ready queue.
   // compute recent cpu, load_avg, nice ...
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
+#ifdef USERPROG
   while (timer_elapsed (start) < ticks) 
     thread_yield ();
+#elif
+  enum intr_level old_level = intr_disable();
+  thread_sleep(start + ticks);
+  thread_block();
+  intr_set_level(old_level);
+#endif
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -119,7 +126,7 @@ timer_usleep (int64_t us)
 
 /* Sleeps for approximately NS nanoseconds.  Interrupts must be
    turned on. */
-void
+M#void
 timer_nsleep (int64_t ns) 
 {
   real_time_sleep (ns, 1000 * 1000 * 1000);
