@@ -180,4 +180,6 @@ int thread_get_load_avg (void);
 
 int thread_add_file (struct file *file);
 
+bool block_less (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+bool ready_less (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 #endif /* threads/thread.h */

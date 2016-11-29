@@ -258,11 +258,11 @@ parse_options (char **argv)
       else if (!strcmp (name, "-mlfqs"))
         thread_mlfqs = true;
 #ifdef USERPROG
-      else if (!strcmp(name, "-aging"))
-        thread_prior_aging = true;
       else if (!strcmp (name, "-ul"))
         user_page_limit = atoi (value);
 #endif
+      else if (!strcmp(name, "-aging"))
+        thread_prior_aging = true;
       else
         PANIC ("unknown option `%s' (use -h for help)", name);
     }

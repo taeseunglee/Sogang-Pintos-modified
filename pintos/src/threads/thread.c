@@ -60,6 +60,7 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 #ifndef USERPROG
 /* For project 1 */
 bool thread_prior_aging;
+int64_t age_ticks;
 #endif
 
 /* If false (default), use round-robin scheduler.
@@ -81,8 +82,6 @@ void thread_schedule_tail (struct thread *prev);
 static bool taf_less (const struct list_elem *a, const struct list_elem *b, void* aux UNUSED);
 static tid_t allocate_tid (void);
 static void thread_aging (void);
-static bool block_less (const struct list_elem *a, const struct list_elem *b, void *aux);
-static bool ready_less (const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -115,19 +114,19 @@ thread_init (void)
 }
 
 static void
-thread_wake()
+thread_wake(void)
 {
   int64_t cur_ticks = timer_ticks();
   struct list_elem *e = list_begin(&block_list);
 
-  while (e != NULL)
+  while (e != list_end(&block_list))
     {
       struct thread *t = list_entry(e, struct thread, elem);
-      if (t->ticks < cur_ticks)
+      if (!(t->ticks > cur_ticks))
         {
-          thread_unblock(t);
           list_pop_front(&block_list);
           e = list_begin(&block_list);
+          thread_unblock(t);
         }
       else
         break;
@@ -174,8 +173,10 @@ thread_tick (void)
   /* For project 1 */
 #ifndef USERPROG
   thread_wake();
-  if (thread_prior_aging)
+  if (thread_prior_aging) {
+    age_ticks++;
     thread_aging();
+  }
 #endif
 }
 
@@ -255,6 +256,9 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  if (priority > thread_current()->priority)
+    thread_yield();
+
   return tid;
 }
 
@@ -291,7 +295,7 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  // XXX : list_insert_ordered!
+// XXX : list_insert_ordered!
 //  list_push_back (&ready_list, &t->elem);
   list_insert_ordered(&ready_list, &t->elem, ready_less, NULL);
   t->status = THREAD_READY;
@@ -408,6 +412,7 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  thread_yield();
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -684,18 +689,24 @@ thread_add_file (struct file *file)
 static void
 thread_aging (void)
 {
-  /* Not yet implemented */
+  struct list_elem*e;
+  for (e = list_begin(&ready_list); e!= list_end(&ready_list);
+       e = list_next(e))
+    {
+      struct thread *t = list_entry(e, struct thread, elem);
+      t->priority ++;
+    }
 }
 
-static bool
-block_less (const struct list_elem *a, const struct list_elem *b, void *aux)
+bool
+block_less (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
   return list_entry(a, struct thread, elem)->ticks
    < list_entry(b, struct thread, elem)->ticks;
 }
 
-static bool
-ready_less (const struct list_elem *a, const struct list_elem *b, void *aux)
+bool
+ready_less (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
   return list_entry(a, struct thread, elem)->priority >
    list_entry(b, struct thread, elem)->priority;
