@@ -100,7 +100,7 @@ timer_sleep (int64_t ticks)
 #ifdef USERPROG
   while (timer_elapsed (start) < ticks) 
     thread_yield ();
-#elif
+#else
   enum intr_level old_level = intr_disable();
   thread_sleep(start + ticks);
   thread_block();
@@ -126,7 +126,7 @@ timer_usleep (int64_t us)
 
 /* Sleeps for approximately NS nanoseconds.  Interrupts must be
    turned on. */
-M#void
+void
 timer_nsleep (int64_t ns) 
 {
   real_time_sleep (ns, 1000 * 1000 * 1000);
