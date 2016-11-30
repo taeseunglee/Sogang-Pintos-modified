@@ -184,6 +184,15 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+
+  if(ticks%4 == 0)
+    {
+      // reset the priority
+    }
+  if(ticks%TIMER_FREQ == 0)
+    {
+      // reset recent_cpu and load_avg
+    }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
