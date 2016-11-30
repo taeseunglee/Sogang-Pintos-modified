@@ -11,6 +11,11 @@
 extern bool thread_prior_aging;
 #endif
 
+/* Fixed-point format POINT = 2^14 (17.14 format) */
+#define POINT 16384
+
+typedef int32_t REAL;
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -109,8 +114,10 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-    int nice;                           /* Niceness */
+    int32_t nice;                       /* Niceness */
+    REAL recent_cpu;                    /* Recent_cpu */
     int64_t ticks;
+    
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -182,4 +189,9 @@ int thread_add_file (struct file *file);
 
 bool block_less (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 bool ready_less (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
+void update_priority(struct thread *t, void *aux UNUSED);
+void update_recent_cpu(struct thread *t, void *aux UNUSED);
+void update_load_avg(void);
+void sort_ready_list(void);
 #endif /* threads/thread.h */

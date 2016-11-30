@@ -27,6 +27,8 @@
 static struct list ready_list;
 static struct list block_list;
 
+static REAL load_avg;
+
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
@@ -42,11 +44,11 @@ static struct lock tid_lock;
 
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
-  {
-    void *eip;                  /* Return address. */
-    thread_func *function;      /* Function to call. */
-    void *aux;                  /* Auxiliary data for function. */
-  };
+{
+  void *eip;                  /* Return address. */
+  thread_func *function;      /* Function to call. */
+  void *aux;                  /* Auxiliary data for function. */
+};
 
 /* Statistics. */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
@@ -111,6 +113,10 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+
+  /* Set initial nice & recent_cpu */
+  initial_thread->nice = 0;
+  initial_thread->recent_cpu = 0;
 }
 
 static void
@@ -155,6 +161,25 @@ void
 thread_tick (void) 
 {
   struct thread *t = thread_current ();
+
+  if(t != idle_thread)
+    t->recent_cpu += POINT;
+
+  if(thread_mlfqs)
+    {
+    enum intr_level old_level = intr_disable();
+    if(timer_ticks()%4 == 0)
+      {
+        thread_foreach(update_priority, NULL);
+        sort_ready_list();
+      }
+    if(timer_ticks()%TIMER_FREQ == 0)
+      {
+        thread_foreach(update_recent_cpu, NULL);
+        update_load_avg();
+      }
+    intr_set_level(old_level);
+    }
 
   /* Update statistics. */
   if (t == idle_thread)
@@ -253,6 +278,10 @@ thread_create (const char *name, int priority,
   list_push_back (&cur->child_list,
                   &t->child_elem);
 
+  /* inherit parent's nice & recent_cpu */
+  t->nice = cur->nice;
+  t->recent_cpu = cur->recent_cpu;
+
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -295,8 +324,8 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-// XXX : list_insert_ordered!
-//  list_push_back (&ready_list, &t->elem);
+  // XXX : list_insert_ordered!
+  //  list_push_back (&ready_list, &t->elem);
   list_insert_ordered(&ready_list, &t->elem, ready_less, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
@@ -316,7 +345,7 @@ struct thread *
 thread_current (void) 
 {
   struct thread *t = running_thread ();
-  
+
   /* Make sure T is really a thread.
      If either of these assertions fire, then your thread may
      have overflowed its stack.  Each thread has less than 4 kB
@@ -363,12 +392,12 @@ thread_yield (void)
 {
   struct thread *cur = thread_current ();
   enum intr_level old_level;
-  
+
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-// XXX : list_push_back (&ready_list, &cur->elem);
+    // XXX : list_push_back (&ready_list, &cur->elem);
     list_insert_ordered(&ready_list, &cur->elem, ready_less, NULL);
   cur->status = THREAD_READY;
   schedule ();
@@ -417,33 +446,58 @@ thread_set_priority (int new_priority)
 
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED) 
+thread_set_nice (int new_nice) 
 {
-  /* Not yet implemented. */
+  if(new_nice < -20)
+    new_nice = -20;
+  if(new_nice > 20)
+    new_nice = 20;
+  thread_current()->nice = new_nice;
+
+  enum intr_level old_level = intr_disable();
+  thread_foreach(update_priority, NULL);
+  intr_set_level(old_level);
+  sort_ready_list();
+
+  int highest_prty = list_entry(list_begin(&ready_list), struct thread, elem)->priority;
+  if(thread_current()->priority < highest_prty)
+    thread_yield();
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  int32_t temp;
+  if(load_avg >= 0)
+    {
+      temp = (load_avg + POINT/2) / POINT;
+    }
+  else
+    temp = (load_avg - POINT/2) / POINT;
+
+  return temp*100;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  int32_t temp = thread_current()->recent_cpu;
+  if(temp >= 0)
+    {
+      temp = (temp + POINT/2) / POINT;
+    }
+  else
+    temp = (temp - POINT/2) / POINT;
+  return temp*100;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -588,7 +642,7 @@ void
 thread_schedule_tail (struct thread *prev)
 {
   struct thread *cur = running_thread ();
-  
+
   ASSERT (intr_get_level () == INTR_OFF);
 
   /* Mark us as running. */
@@ -680,7 +734,7 @@ thread_add_file (struct file *file)
   struct file_list *fl = malloc (sizeof(struct file_list));
   fl->fd = fd;
   fl->file = file;
- 
+
   list_insert_ordered (&cur->filelist, &fl->ptr, taf_less, NULL);
 
   return fd;
@@ -710,6 +764,37 @@ ready_less (const struct list_elem *a, const struct list_elem *b, void *aux UNUS
 {
   return list_entry(a, struct thread, elem)->priority >
    list_entry(b, struct thread, elem)->priority;
+}
+
+void
+update_priority(struct thread *t, void *aux UNUSED)
+{
+  REAL temp_prty = PRI_MAX*POINT - (t->recent_cpu)/4 - (t->nice)*2;
+  t->priority = temp_prty / POINT;
+}
+
+void 
+update_recent_cpu(struct thread *t, void *aux UNUSED)
+{
+  REAL temp = ((int64_t)(2*load_avg))*POINT / (2*load_avg + POINT);
+  REAL temp2 = temp * (t->recent_cpu);
+  REAL temp3 = temp2 + (t->nice)*POINT;
+  t->recent_cpu = temp3*POINT;
+}
+
+void 
+update_load_avg(void)
+{
+  int32_t ready_threads = list_size(&ready_list);
+  if(thread_current() != idle_thread)
+    ready_threads += 1;
+  load_avg = (59*load_avg + ready_threads*POINT) / 60;
+}
+
+void
+sort_ready_list(void)
+{
+  list_sort(&ready_list,ready_less,NULL);
 }
 
 /* Offset of `stack' member within `struct thread'.
