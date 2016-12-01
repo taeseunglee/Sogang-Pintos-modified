@@ -175,8 +175,8 @@ thread_tick (void)
       }
     if(timer_ticks()%TIMER_FREQ == 0)
       {
-        thread_foreach(update_recent_cpu, NULL);
         update_load_avg();
+        thread_foreach(update_recent_cpu, NULL);
       }
     intr_set_level(old_level);
     }
@@ -475,6 +475,7 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
+  /*
   int32_t temp;
   if(load_avg >= 0)
     {
@@ -482,14 +483,15 @@ thread_get_load_avg (void)
     }
   else
     temp = (load_avg - POINT/2) / POINT;
-
-  return temp*100;
+  */
+  return load_avg*100 / POINT;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
+  /*
   int32_t temp = thread_current()->recent_cpu;
   if(temp >= 0)
     {
@@ -497,7 +499,8 @@ thread_get_recent_cpu (void)
     }
   else
     temp = (temp - POINT/2) / POINT;
-  return temp*100;
+  */
+  return thread_current()->recent_cpu*100 / POINT;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -769,7 +772,7 @@ ready_less (const struct list_elem *a, const struct list_elem *b, void *aux UNUS
 void
 update_priority(struct thread *t, void *aux UNUSED)
 {
-  REAL temp_prty = PRI_MAX*POINT - (t->recent_cpu)/4 - (t->nice)*2;
+  REAL temp_prty = PRI_MAX*POINT - (t->recent_cpu)/4 - (t->nice)*2*POINT;
   t->priority = temp_prty / POINT;
 }
 
@@ -777,9 +780,9 @@ void
 update_recent_cpu(struct thread *t, void *aux UNUSED)
 {
   REAL temp = ((int64_t)(2*load_avg))*POINT / (2*load_avg + POINT);
-  REAL temp2 = temp * (t->recent_cpu);
+  REAL temp2 = ((int64_t)temp) * (t->recent_cpu) / POINT;
   REAL temp3 = temp2 + (t->nice)*POINT;
-  t->recent_cpu = temp3*POINT;
+  t->recent_cpu = temp3;
 }
 
 void 
