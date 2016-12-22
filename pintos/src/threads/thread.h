@@ -6,10 +6,10 @@
 #include <stdint.h>
 #include "threads/synch.h"
 
-#ifndef USERPROG
+// #ifndef USERPROG
 // For project #1
 extern bool thread_prior_aging;
-#endif
+// #endif
 
 /* Fixed-point format POINT = 2^14 (17.14 format) */
 #define POINT 16384

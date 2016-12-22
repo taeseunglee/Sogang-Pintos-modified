@@ -59,11 +59,11 @@ static long long user_ticks;    /* # of timer ticks in user programs. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
-#ifndef USERPROG
+// #ifndef USERPROG
 /* For project 1 */
 bool thread_prior_aging;
 int64_t age_ticks;
-#endif
+// #endif
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -196,13 +196,13 @@ thread_tick (void)
     intr_yield_on_return ();
 
   /* For project 1 */
-#ifndef USERPROG
+// #ifndef USERPROG
   thread_wake();
   if (thread_prior_aging) {
     age_ticks++;
     thread_aging();
   }
-#endif
+// #endif
 }
 
 /* Prints thread statistics. */

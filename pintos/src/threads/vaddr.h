@@ -39,7 +39,7 @@ static inline void *pg_round_up (const void *va) {
 static inline void *pg_round_down (const void *va) {
   return (void *) ((uintptr_t) va & ~PGMASK);
 }
-
+
 /* Base address of the 1:1 physical-to-virtual mapping.  Physical
    memory is mapped starting at this virtual address.  Thus,
    physical address 0 is accessible at PHYS_BASE, physical
@@ -81,6 +81,7 @@ ptov (uintptr_t paddr)
 static inline uintptr_t
 vtop (const void *vaddr)
 {
+//  printf("vaddr : %p\n", vaddr);
   ASSERT (is_kernel_vaddr (vaddr));
 
   return (uintptr_t) vaddr - (uintptr_t) PHYS_BASE;

@@ -9,11 +9,15 @@
 #include "userprog/syscall.h"
 #include "userprog/pagedir.h"
 
+#include "threads/palloc.h"
+#define PG_LIMIT 0xBF800000
+
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
+static void page_fault_handler(void *fault_addr);
 
 /* Registers handlers for interrupts that can be caused by user
    programs.
@@ -124,11 +128,11 @@ kill (struct intr_frame *f)
    description of "Interrupt 14--Page Fault Exception (#PF)" in
    [IA32-v3a] section 5.15 "Exception and Interrupt Reference". */
 static void
-page_fault (struct intr_frame *f UNUSED) 
+page_fault (struct intr_frame *f) 
 {
-//  bool not_present;  /* True: not-present page, false: writing r/o page. */
-//  bool write;        /* True: access was write, false: access was read. */
-//  bool user;         /* True: access by user, false: access by kernel. */
+  bool not_present;  /* True: not-present page, false: writing r/o page. */
+  bool write;        /* True: access was write, false: access was read. */
+  bool user;         /* True: access by user, false: access by kernel. */
   void *fault_addr;  /* Fault address. */
 
   /* Obtain faulting address, the virtual address that was
@@ -147,16 +151,27 @@ page_fault (struct intr_frame *f UNUSED)
   /* Count page faults. */
   page_fault_cnt++;
 
+  syscall_exit(-1);
+
   /* Determine cause. */
-  /*
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
-*/
+
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
-  syscall_exit(-1);
+
+  if(!not_present){
+    syscall_exit(-1);
+  }
+  else if(!write){
+    syscall_exit(-1);
+  }
+  else if(!user){
+    syscall_exit(-1);
+  }
+  page_fault_handler(fault_addr);
 
   //thread_exit();
   /*
@@ -183,4 +198,21 @@ bool is_valid_ptr (const void *uaddr)
       }
     }
   return false;
+}
+
+static void
+page_fault_handler(void *fault_addr)
+{
+  void *phy_page;
+  static void *p = PHYS_BASE - 2*PGSIZE;
+
+  if(is_user_vaddr(fault_addr) && pg_round_up(fault_addr) >= 0xBF800000){
+    phy_page = palloc_get_page(PAL_USER|PAL_ZERO);
+    pagedir_set_page(thread_current()->pagedir,p,phy_page,1);
+    p -= PGSIZE;
+    return ;
+  }
+  else{
+    syscall_exit(-1);
+  }
 }
